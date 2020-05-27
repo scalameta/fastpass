@@ -63,6 +63,7 @@ jobs:
       - uses: olafurpg/setup-scala@v6
         with:
           java-version: graalvm@20.1.0
+      - run: git fetch --tags
       - run: gu install native-image
       - run: sbt native-image
       - uses: actions/upload-artifact@master
