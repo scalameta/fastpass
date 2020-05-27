@@ -58,8 +58,24 @@ inThisBuild(
   )
 )
 
+skip in publish := true
+crossScalaVersions := Nil
+
+addCommandAlias(
+  "native-image",
+  "; fastpass/graalvm-native-image:packageBin ; taskready"
+)
+
+commands += Command.command("taskready") { s =>
+  import scala.sys.process._
+  if (System.getenv("CI") == null) {
+    scala.util.Try("say 'native-image ready'".!)
+  }
+  s
+}
+
 lazy val fastpass = project
-  .in(file("."))
+  .in(file("fastpass"))
   .enablePlugins(BuildInfoPlugin, GraalVMNativeImagePlugin)
   .settings(
     organization := "org.scalameta",
@@ -85,9 +101,23 @@ lazy val fastpass = project
       "bloopNightlyVersion" -> V.bloop,
       "scala212" -> V.scala212
     ),
-    mainClass in GraalVMNativeImage := Some(
-      "scala.meta.internal.fastpass.pantsbuild.BloopPants"
+    mainClass.in(GraalVMNativeImage) := Some(
+      "scala.meta.fastpass.Fastpass"
     ),
+    graalVMNativeImageCommand ~= { old =>
+      import scala.util.Try
+      import java.nio.file.Paths
+      import scala.sys.process._
+      Try {
+        val jabba = Paths
+          .get(sys.props("user.home"))
+          .resolve(".jabba")
+          .resolve("bin")
+          .resolve("jabba")
+        val home = s"$jabba which --home graalvm@20.1.0".!!.trim()
+        Paths.get(home).resolve("bin").resolve("native-image").toString
+      }.getOrElse(old)
+    },
     graalVMNativeImageOptions ++= {
       val reflectionFile =
         Keys.sourceDirectory.in(Compile).value./("graal")./("reflection.json")
@@ -95,7 +125,7 @@ lazy val fastpass = project
       List(
         "-H:+ReportUnsupportedElementsAtRuntime",
         "--initialize-at-build-time",
-        "--initialize-at-run-time=scala.meta.fastpass,metaconfig",
+        "--initialize-at-run-time=scala.meta.internal.fastpass,metaconfig",
         "--no-server",
         "--enable-http",
         "--enable-https",
@@ -108,13 +138,3 @@ lazy val fastpass = project
       )
     }
   )
-
-addCommandAlias(
-  "fastpass-link",
-  "; fastpass/graalvm-native-image:packageBin ; taskready"
-)
-commands += Command.command("taskready") { s =>
-  import scala.sys.process._
-  "say 'native-image ready'".!
-  s
-}
