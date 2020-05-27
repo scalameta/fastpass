@@ -46,7 +46,7 @@ lazy val fastpass = project
       "org.scalameta" %% "trees" % V.scalameta,
       "ch.epfl.scala" % "bsp4j" % V.bsp
     ),
-    buildInfoPackage := "scala.meta.fastpass.internal",
+    buildInfoPackage := "scala.meta.internal.fastpass",
     buildInfoKeys := Seq[BuildInfoKey](
       "metalsVersion" -> V.metals,
       "fastpassVersion" -> version.value,
@@ -56,7 +56,7 @@ lazy val fastpass = project
       "scala212" -> V.scala212
     ),
     mainClass in GraalVMNativeImage := Some(
-      "scala.meta.fastpass.pantsbuild.BloopPants"
+      "scala.meta.internal.fastpass.pantsbuild.BloopPants"
     ),
     graalVMNativeImageOptions ++= {
       val reflectionFile =
