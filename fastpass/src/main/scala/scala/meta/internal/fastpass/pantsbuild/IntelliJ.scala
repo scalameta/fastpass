@@ -22,6 +22,7 @@ import scala.meta.internal.fastpass.zipkin.ZipkinProperties
 import ujson.Obj
 import ujson.Str
 import scala.meta.internal.fastpass.FastpassEnrichments._
+import scala.meta.fastpass.Fastpass
 
 object IntelliJ {
   def launch(project: Project, open: OpenOptions): Unit = {
@@ -103,7 +104,7 @@ object IntelliJ {
       "--ttl",
       "Inf",
       "--main",
-      classOf[BloopPants].getName,
+      classOf[Fastpass].getName,
       "--",
       RefreshCommand.name,
       "--workspace",

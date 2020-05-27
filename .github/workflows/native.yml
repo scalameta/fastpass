@@ -21,7 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: olafurpg/setup-scala@v6
-      - uses: olafurpg/setup-scala@v6
         with:
           java-version: graalvm@20.1.0
       - run: git fetch --tags || true
