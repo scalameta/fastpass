@@ -183,11 +183,9 @@ object SharedCommand {
   /** Upgrades the Bloop server if it's known to be an old version. */
   private def restartOldBloopServer(): Unit = {
     val isOutdated = Set[String](
-      "1.4.0-RC1-190-ef7d8dba",
-      "1.4.0-RC1-167-61fbbe08",
-      "1.4.0-RC1-69-693de22a",
-      "1.4.0-RC1+33-dfd03f53",
-      "1.4.0-RC1"
+      "1.4.0-RC1-235-3231567a", "1.4.0-RC1-190-ef7d8dba",
+      "1.4.0-RC1-167-61fbbe08", "1.4.0-RC1-69-693de22a",
+      "1.4.0-RC1+33-dfd03f53", "1.4.0-RC1"
     )
     Try {
       val version = List("bloop", "--version").!!.linesIterator
