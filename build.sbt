@@ -28,6 +28,36 @@ onLoad.in(Global) ~= { old =>
   old
 }
 
+inThisBuild(
+  List(
+    organization := "org.scalameta",
+    homepage := Some(url("https://github.com/scalameta/fastpass")),
+    licenses := Seq(
+      "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
+    ),
+    developers := List(
+      Developer(
+        "olafurpg",
+        "Ólafur Páll Geirsson",
+        "olafurpg@gmail.com",
+        url("https://geirsson.com")
+      ),
+      Developer(
+        "wiwa",
+        "Win Wang",
+        "winw@twitter.com",
+        url("https://github.com/wiwa")
+      ),
+      Developer(
+        "Duhemm",
+        "Martin Duhem",
+        "martin.duhem@gmail.com",
+        url("https://github.com/Duhemm")
+      )
+    )
+  )
+)
+
 lazy val fastpass = project
   .in(file("."))
   .enablePlugins(BuildInfoPlugin, GraalVMNativeImagePlugin)
