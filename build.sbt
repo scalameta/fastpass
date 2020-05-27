@@ -58,6 +58,9 @@ inThisBuild(
   )
 )
 
+skip in publish := true
+crossScalaVersions := Nil
+
 addCommandAlias(
   "native-image",
   "; fastpass/graalvm-native-image:packageBin ; taskready"

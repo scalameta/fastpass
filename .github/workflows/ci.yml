@@ -65,8 +65,7 @@ jobs:
           java-version: graalvm@20.1.0
       - run: gu install native-image
       - run: sbt native-image
-      - run: cp fastpass/target/graalvm-native-image/fastpass fastpass
       - uses: actions/upload-artifact@master
         with:
           name: ${{ matrix.artifact }}
-          path: fastpass
+          path: fastpass/target/graalvm-native-image/fastpass
