@@ -10,7 +10,9 @@ case class Cycles(
     parents.getOrElse(target, target)
 }
 object Cycles {
-  def findConnectedComponents(targets: Map[String, PantsTarget]): Cycles = {
+  def findConnectedComponents(
+      targets: collection.Map[String, PantsTarget]
+  ): Cycles = {
     val graph = Graph.fromTargets(targets.values.toIndexedSeq)
     val ccs = Tarjans.fromGraph(graph.graph)
     val children = mutable.Map.empty[String, List[String]]

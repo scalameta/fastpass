@@ -14,7 +14,7 @@ import scala.meta.internal.io.FileIO
 import scala.meta.io.AbsolutePath
 import scala.util.control.NonFatal
 
-object FastpassEnrichments extends DecorateAsScala {
+object FastpassEnrichments extends DecorateAsScala with DecorateAsJava {
 
   implicit class XtensionStream[A](stream: java.util.stream.Stream[A]) {
     def asScala: Generator[A] = {

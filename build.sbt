@@ -81,6 +81,7 @@ lazy val fastpass = project
     organization := "org.scalameta",
     name := "fastpass",
     scalaVersion := V.scala212,
+    fork := true,
     libraryDependencies ++= Seq(
       "com.geirsson" %% "metaconfig-core" % V.metaconfig,
       "io.get-coursier" % "interface" % V.coursierInterfaces,
@@ -100,6 +101,9 @@ lazy val fastpass = project
       "bloopVersion" -> V.bloop,
       "bloopNightlyVersion" -> V.bloop,
       "scala212" -> V.scala212
+    ),
+    mainClass.in(Compile) := Some(
+      "scala.meta.fastpass.Fastpass"
     ),
     mainClass.in(GraalVMNativeImage) := Some(
       "scala.meta.fastpass.Fastpass"
