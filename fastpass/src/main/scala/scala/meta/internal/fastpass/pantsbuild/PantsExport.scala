@@ -92,11 +92,11 @@ object PantsExport {
       val compileLibraries: mutable.ArrayBuffer[String] = value
         .getOrElse(PantsKeys.compileLibraries, value(PantsKeys.libraries))
         .arr
-        .map(_.str)
+        .map(_.str.intern())
       val runtimeLibraries: mutable.ArrayBuffer[String] = value
         .getOrElse(PantsKeys.runtimeLibraries, value(PantsKeys.libraries))
         .arr
-        .map(_.str)
+        .map(_.str.intern())
       val isPantsTargetRoot = value(PantsKeys.isTargetRoot).bool
       val pantsTargetType =
         PantsTargetType(value(PantsKeys.pantsTargetType).str)
@@ -142,8 +142,9 @@ object PantsExport {
     val allLibraries = output.obj(PantsKeys.libraries).obj
     val libraries = new ju.HashMap[String, PantsLibrary]
     for {
-      (libraryName, valueObj) <- allLibraries.iterator
+      (libraryNameNonInterned, valueObj) <- allLibraries.iterator
     } {
+      val libraryName = libraryNameNonInterned.intern()
       // The "$ORGANIZATION:$ARTIFACT" part of Maven library coordinates.
       val module = {
         val colon = libraryName.lastIndexOf(':')
@@ -156,7 +157,10 @@ object PantsExport {
           if (Files.exists(path)) Some(key -> path)
           else None
       }
-      libraries.put(libraryName, PantsLibrary(libraryName, module, values))
+      libraries.put(
+        libraryName,
+        PantsLibrary(libraryName, module, values)
+      )
     }
 
     val cycles = Cycles.findConnectedComponents(targets.asScala)

@@ -387,7 +387,7 @@ private class BloopPants(
   val points = 100 / intervals
   val isProgressPoint = 0
     .until(size)
-    .by(size / (intervals - 1))
+    .by(math.max(1, size / (intervals - 1)))
     .zipWithIndex
     .toMap
     .updated(size - 1, intervals)
@@ -402,94 +402,121 @@ private class BloopPants(
       }
     }
   }
-  private def toBloopProject(target: PantsTarget): C.Project = {
 
-    val baseDirectory: Path = target.baseDirectory(workspace)
-
-    val sources: List[Path] =
-      if (target.targetType.isResourceOrTestResource) Nil
-      else if (!target.globs.isStatic) Nil
-      else if (target.isGeneratedTarget) target.roots.sourceRoots
-      else {
-        target.globs.staticPaths(workspace) match {
-          case Some(paths) => paths
-          case _ => Nil
-        }
+  def getSources(target: PantsTarget): List[Path] =
+    if (target.targetType.isResourceOrTestResource) Nil
+    else if (!target.globs.isStatic) Nil
+    else if (target.isGeneratedTarget) target.roots.sourceRoots
+    else {
+      target.globs.staticPaths(workspace) match {
+        case Some(paths) => paths
+        case _ => Nil
       }
-    val sourcesGlobs: Option[List[C.SourcesGlobs]] =
-      if (target.targetType.isResourceOrTestResource) None
-      else if (target.globs.isStatic) None
-      else if (target.globs.isEmpty) None
-      else Some(List(target.globs.bloopConfig(workspace, baseDirectory)))
+    }
 
-    val transitiveDependencies: List[PantsTarget] = (for {
+  def getSourcesGlobs(
+      target: PantsTarget,
+      baseDirectory: Path
+  ): Option[List[C.SourcesGlobs]] =
+    if (target.targetType.isResourceOrTestResource) None
+    else if (target.globs.isStatic) None
+    else if (target.globs.isEmpty) None
+    else Some(List(target.globs.bloopConfig(workspace, baseDirectory)))
+
+  def getTransitiveDependencies(
+      target: PantsTarget
+  ): collection.Seq[PantsTarget] =
+    (for {
       dependency <- target.transitiveDependencies
       if dependency != target.name
-    } yield export.targets(dependency)).toList
+    } yield export.targets(dependency)).toArray[PantsTarget]
 
-    val dependencies: List[String] = for {
-      dependency <- transitiveDependencies
+  def getDependencies(
+      target: PantsTarget,
+      transitiveDependencies: collection.Seq[PantsTarget]
+  ): collection.Seq[String] =
+    (for {
+      dependency <- transitiveDependencies.iterator
       // Rewrite dependencies on targets that belong to a cyclic component.
       acyclicDependencyName = cycles.acyclicDependency(dependency.name)
       if acyclicDependencyName != target.name
       acyclicDependency = export.targets(acyclicDependencyName)
       if acyclicDependency.isTargetRoot
-    } yield acyclicDependency.dependencyName
+    } yield acyclicDependency.dependencyName).toArray[String]
+
+  def classpath(
+      target: PantsTarget,
+      transitiveDependencies: collection.Seq[PantsTarget],
+      libraries: mutable.ArrayBuffer[PantsLibrary]
+  ): List[Path] = {
+    val classpathEntries = new ju.HashSet[Path]
+    val result = mutable.ListBuffer.empty[Path]
+    for {
+      dependency <- transitiveDependencies.iterator
+    } {
+      if (dependency.isTargetRoot) {
+        val acyclicDependency = cycles.parents
+          .get(dependency.name)
+          .flatMap(export.targets.get)
+          .getOrElse(dependency)
+        classpathEntries.add(acyclicDependency.classesDir)
+      }
+    }
+
+    for {
+      library <- libraries.iterator
+      path <- library.nonSources
+    } {
+      classpathEntries.add(toImmutableJar(library, path))
+    }
+    classpathEntries.addAll(allScalaJars.asJava)
+    if (target.targetType.isTest) {
+      classpathEntries.addAll(testingFrameworkJars.asJava)
+    }
+    classpathEntries.iterator.asScala.toList
+  }
+
+  def getResolution(libraries: ClasspathLibraries): Option[C.Resolution] = Some(
+    C.Resolution(
+      (for {
+        // NOTE(olafur): we don't include sources of runtime libraries
+        // to reduce the amount of sources.jar to index in IntelliJ.
+        library <- libraries.compile.iterator
+        // NOTE(olafur): avoid sending the same *-sources.jar to reduce the
+        // size of the Bloop JSON configs. Both IntelliJ and Metals only need each
+        // jar to appear once.
+        if !sourcesJars.contains(library)
+        source <- library.sources
+      } yield {
+        sourcesJars.add(library)
+        newSourceModule(source)
+      }).toList
+    )
+  )
+
+  private def toBloopProject(target: PantsTarget): C.Project = {
+
+    val baseDirectory: Path = target.baseDirectory(workspace)
+
+    val sources = getSources(target)
+    val sourcesGlobs = getSourcesGlobs(target, baseDirectory)
+
+    val transitiveDependencies = getTransitiveDependencies(target)
+
+    val dependencies = getDependencies(target, transitiveDependencies)
 
     val libraries = classpathLibraries(target, transitiveDependencies)
 
-    def classpath(libraries: List[PantsLibrary]): List[Path] = {
-      val classpathEntries = new ju.HashSet[Path]
-      val result = mutable.ListBuffer.empty[Path]
-      for {
-        dependency <- transitiveDependencies.iterator
-      } {
-        if (dependency.isTargetRoot) {
-          val acyclicDependency = cycles.parents
-            .get(dependency.name)
-            .flatMap(export.targets.get)
-            .getOrElse(dependency)
-          classpathEntries.add(acyclicDependency.classesDir)
-        }
-      }
+    val compileClasspath =
+      classpath(target, transitiveDependencies, libraries.compile)
+    val runtimeClasspath =
+      classpath(target, transitiveDependencies, libraries.runtime)
 
-      for {
-        library <- libraries.iterator
-        path <- library.nonSources
-      } {
-        classpathEntries.add(toImmutableJar(library, path))
-      }
-      classpathEntries.addAll(allScalaJars.asJava)
-      if (target.targetType.isTest) {
-        classpathEntries.addAll(testingFrameworkJars.asJava)
-      }
-      classpathEntries.iterator.asScala.toList
-    }
-    val compileClasspath = classpath(libraries.compile)
-    val runtimeClasspath = classpath(libraries.runtime)
-
-    val resolution = Some(
-      C.Resolution(
-        (for {
-          // NOTE(olafur): we don't include sources of runtime libraries
-          // to reduce the amount of sources.jar to index in IntelliJ.
-          library <- libraries.compile.iterator
-          // NOTE(olafur): avoid sending the same *-sources.jar to reduce the
-          // size of the Bloop JSON configs. Both IntelliJ and Metals only need each
-          // jar to appear once.
-          if !sourcesJars.contains(library)
-          source <- library.sources
-        } yield {
-          sourcesJars.add(library)
-          newSourceModule(source)
-        }).toList
-      )
-    )
+    val resolution = getResolution(libraries)
 
     val out: Path = bloopDir.resolve(target.directoryName)
     val classesDir = target.classesDir
-    val javaHome: Option[Path] =
-      target.platform.map(Paths.get(_))
+    val javaHome: Option[Path] = target.platform.map(Paths.get(_))
 
     val resources: Option[List[Path]] =
       if (!target.targetType.isResourceOrTestResource) None
@@ -514,7 +541,7 @@ private class BloopPants(
       sources = sources,
       sourcesGlobs = sourcesGlobs,
       sourceRoots = Some(sourceRoots),
-      dependencies = dependencies,
+      dependencies = dependencies.toList,
       classpath = compileClasspath,
       out = out,
       classesDir = classesDir,
@@ -542,36 +569,43 @@ private class BloopPants(
   }
 
   case class ClasspathLibraries(
-      compile: List[PantsLibrary],
-      runtime: List[PantsLibrary]
+      compile: mutable.ArrayBuffer[PantsLibrary],
+      runtime: mutable.ArrayBuffer[PantsLibrary]
   )
   def classpathLibraries(
       target: PantsTarget,
-      transitiveDependencies: List[PantsTarget]
+      transitiveDependencies: collection.Seq[PantsTarget]
   ): ClasspathLibraries = {
-    val compile = mutable.ListBuffer.empty[PantsLibrary]
-    val runtime = mutable.ListBuffer.empty[PantsLibrary]
+    val compile = new mutable.ArrayBuffer[PantsLibrary]()
+    val isCompileVisited = new IdentityHashSet[String]
+    val runtime = new mutable.ArrayBuffer[PantsLibrary]()
+    val isRuntimeVisited = new IdentityHashSet[String]
     def visit(
-        out: mutable.ListBuffer[PantsLibrary],
+        out: mutable.ArrayBuffer[PantsLibrary],
+        isVisited: IdentityHashSet[String],
         libraryNames: Seq[String]
     ): Unit = {
       for {
         libraryName <- libraryNames.iterator
       } {
-        val library = export.librariesJava.get(libraryName)
-        // Respect "excludes" setting in Pants BUILD files to exclude library dependencies.
-        if (library != null && !target.excludes.contains(library.module)) {
-          out += library
+        // NOTE(olafur): this
+        if (!isVisited.contains(libraryName)) {
+          isVisited.add(libraryName)
+          val library = export.librariesJava.get(libraryName)
+          // Respect "excludes" setting in Pants BUILD files to exclude library dependencies.
+          if (library != null && !target.excludes.contains(library.module)) {
+            out += library
+          }
         }
       }
     }
-    for {
-      dependency <- (target :: transitiveDependencies).iterator
-    } {
-      visit(compile, dependency.compileLibraries)
-      visit(runtime, dependency.runtimeLibraries)
+    def visitDependency(dependency: PantsTarget): Unit = {
+      visit(compile, isCompileVisited, dependency.compileLibraries)
+      visit(runtime, isRuntimeVisited, dependency.runtimeLibraries)
     }
-    ClasspathLibraries(compile.toList, runtime.toList)
+    visitDependency(target)
+    transitiveDependencies.foreach(visitDependency)
+    ClasspathLibraries(compile, runtime)
   }
 
   // Returns a Bloop project that has no source code. This project only exists

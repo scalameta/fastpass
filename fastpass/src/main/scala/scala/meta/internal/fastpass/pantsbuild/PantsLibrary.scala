@@ -9,10 +9,9 @@ case class PantsLibrary(
 ) {
   def default: Option[Path] = values.get("default")
   def sources: Option[Path] = values.get("sources")
-  def nonSources: Iterator[Path] = {
+  val nonSources: List[Path] =
     values.iterator.collect {
       case (key, path) if key != "sources" =>
         path
-    }
-  }
+    }.toList
 }
