@@ -20,7 +20,9 @@ case class PantsTarget(
     roots: PantsRoots,
     scalacOptions: List[String],
     javacOptions: List[String],
-    extraJvmOptions: List[String]
+    extraJvmOptions: List[String],
+    directoryName: String,
+    classesDir: Path
 ) {
   def isGeneratedTarget: Boolean = name.startsWith(".pants.d")
   private val prefixedId = id.stripPrefix(".")
@@ -31,11 +33,8 @@ case class PantsTarget(
   def isTargetRoot: Boolean =
     isPantsTargetRoot &&
       pantsTargetType.isSupported
-  val directoryName: String = BloopPants.makeClassesDirFilename(id)
   def baseDirectory(workspace: Path): Path =
     PantsConfiguration
       .baseDirectory(AbsolutePath(workspace), name)
       .toNIO
-  def classesDir(bloopDir: Path): Path =
-    Files.createDirectories(bloopDir.resolve(directoryName).resolve("classes"))
 }

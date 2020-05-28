@@ -4,14 +4,19 @@ import java.nio.file.Paths
 import scala.collection.mutable
 import java.nio.file.Files
 import ujson.Obj
+import java.{util => ju}
+import scala.jdk.CollectionConverters._
+import java.nio.file.Path
 
 case class PantsExport(
-    targets: Map[String, PantsTarget],
-    libraries: Map[String, PantsLibrary],
+    targets: collection.Map[String, PantsTarget],
+    librariesJava: ju.HashMap[String, PantsLibrary],
     scalaPlatform: PantsScalaPlatform,
     cycles: Cycles,
     jvmDistribution: PantsPreferredJvmDistribution
-)
+) {
+  def libraries = librariesJava.asScala
+}
 
 object PantsExport {
   def fromJson(args: Export, output: ujson.Value): PantsExport = {
@@ -50,97 +55,119 @@ object PantsExport {
           } yield key -> strict.str).toMap
         case _ => Map.empty
       }
-    val targets: Map[String, PantsTarget] = allTargets.iterator.map {
-      case (name, valueObj) =>
-        val value = valueObj.obj
-        val directDependencies = value(PantsKeys.targets).arr.map(_.str)
-        val syntheticDependencies: Iterable[String] =
-          if (args.isMergeTargetsInSameDirectory) {
-            targetsByDirectory
-              .getOrElse(
-                PantsConfiguration.baseDirectoryString(name),
-                Nil
-              )
-              .filterNot(_ == name)
-          } else {
-            Nil
-          }
-        val dependencies = directDependencies ++ syntheticDependencies
-        val excludes = (for {
-          excludes <- value.get(PantsKeys.excludes).iterator
-          value <- excludes.arr.iterator
-        } yield value.str).toSet
-        val platform = for {
-          platform <- value.get(PantsKeys.platform)
-          javaHome <- jvmPlatforms.get(platform.str)
-        } yield javaHome
-        val transitiveDependencies: Seq[String] =
-          value.get(PantsKeys.transitiveTargets) match {
-            case None => computeTransitiveDependencies(name)
-            case Some(transitiveDepencies) => transitiveDepencies.arr.map(_.str)
-          }
-        val compileLibraries = value
-          .getOrElse(PantsKeys.compileLibraries, value(PantsKeys.libraries))
-          .arr
-          .map(_.str)
-        val runtimeLibraries = value
-          .getOrElse(PantsKeys.runtimeLibraries, value(PantsKeys.libraries))
-          .arr
-          .map(_.str)
-        val isPantsTargetRoot = value(PantsKeys.isTargetRoot).bool
-        val pantsTargetType =
-          PantsTargetType(value(PantsKeys.pantsTargetType).str)
-        val targetType =
-          if (pantsTargetType.isNodeModule) {
-            // NOTE(olafur) Treat "node_module" targets as `target_type:
-            // RESOURCE` since they are included on the runtime classpath even
-            // if they have `target_type: SOURCE`. See
-            // https://github.com/pantsbuild/pants/issues/9026 for a reason why
-            // node_module needs special handling.
-            TargetType("RESOURCE")
-          } else {
-            TargetType(value(PantsKeys.targetType).str)
-          }
-        name -> PantsTarget(
-          name = name,
-          id = value(PantsKeys.id).str,
-          dependencies = dependencies,
-          excludes = excludes,
-          platform = platform,
-          transitiveDependencies = transitiveDependencies,
-          compileLibraries = compileLibraries,
-          runtimeLibraries = runtimeLibraries,
-          isPantsTargetRoot = isPantsTargetRoot,
-          targetType = targetType,
-          pantsTargetType = pantsTargetType,
-          globs = PantsGlobs.fromJson(value),
-          roots = PantsRoots.fromJson(value),
-          scalacOptions = asStringList(value, PantsKeys.scalacArgs),
-          javacOptions = asStringList(value, PantsKeys.javacArgs),
-          extraJvmOptions = asStringList(value, PantsKeys.extraJvmOptions)
-        )
-    }.toMap
+    val targets = new ju.HashMap[String, PantsTarget]
+    for {
+      (name, valueObj) <- allTargets.iterator
+    } {
+      val value = valueObj.obj
+      val directDependencies = value(PantsKeys.targets).arr.map(_.str)
+      val syntheticDependencies: Iterable[String] =
+        if (args.isMergeTargetsInSameDirectory) {
+          targetsByDirectory
+            .getOrElse(
+              PantsConfiguration.baseDirectoryString(name),
+              Nil
+            )
+            .filterNot(_ == name)
+        } else {
+          Nil
+        }
+      val dependencies = directDependencies ++ syntheticDependencies
+      val excludes = new ju.HashSet[String]
+      for {
+        exclude <- value.get(PantsKeys.excludes).iterator
+        value <- exclude.arr.iterator
+      } {
+        excludes.add(value.str)
+      }
+      val platform = for {
+        platform <- value.get(PantsKeys.platform)
+        javaHome <- jvmPlatforms.get(platform.str)
+      } yield javaHome
+      val transitiveDependencies: Seq[String] =
+        value.get(PantsKeys.transitiveTargets) match {
+          case None => computeTransitiveDependencies(name)
+          case Some(transitiveDepencies) => transitiveDepencies.arr.map(_.str)
+        }
+      val compileLibraries: mutable.ArrayBuffer[String] = value
+        .getOrElse(PantsKeys.compileLibraries, value(PantsKeys.libraries))
+        .arr
+        .map(_.str)
+      val runtimeLibraries: mutable.ArrayBuffer[String] = value
+        .getOrElse(PantsKeys.runtimeLibraries, value(PantsKeys.libraries))
+        .arr
+        .map(_.str)
+      val isPantsTargetRoot = value(PantsKeys.isTargetRoot).bool
+      val pantsTargetType =
+        PantsTargetType(value(PantsKeys.pantsTargetType).str)
+      val targetType =
+        if (pantsTargetType.isNodeModule) {
+          // NOTE(olafur) Treat "node_module" targets as `target_type:
+          // RESOURCE` since they are included on the runtime classpath even
+          // if they have `target_type: SOURCE`. See
+          // https://github.com/pantsbuild/pants/issues/9026 for a reason why
+          // node_module needs special handling.
+          TargetType("RESOURCE")
+        } else {
+          TargetType(value(PantsKeys.targetType).str)
+        }
+      val id = value(PantsKeys.id).str
+      val directoryName = BloopPants.makeClassesDirFilename(id)
+      val classesDir: Path = Files.createDirectories(
+        args.bloopDir.resolve(directoryName).resolve("classes")
+      )
+      val target = PantsTarget(
+        name = name,
+        id = id,
+        dependencies = dependencies,
+        excludes = excludes.asScala,
+        platform = platform,
+        transitiveDependencies = transitiveDependencies,
+        compileLibraries = compileLibraries,
+        runtimeLibraries = runtimeLibraries,
+        isPantsTargetRoot = isPantsTargetRoot,
+        targetType = targetType,
+        pantsTargetType = pantsTargetType,
+        globs = PantsGlobs.fromJson(value),
+        roots = PantsRoots.fromJson(value),
+        scalacOptions = asStringList(value, PantsKeys.scalacArgs),
+        javacOptions = asStringList(value, PantsKeys.javacArgs),
+        extraJvmOptions = asStringList(value, PantsKeys.extraJvmOptions),
+        directoryName = directoryName,
+        classesDir = classesDir
+      )
+      targets.put(name, target)
+    }
 
     val allLibraries = output.obj(PantsKeys.libraries).obj
-    val libraries: Map[String, PantsLibrary] = allLibraries.iterator.map {
-      case (name, valueObj) =>
-        name -> PantsLibrary(name, valueObj.obj.flatMap {
-          case (key, value) =>
-            val path = Paths.get(value.str)
-            if (Files.exists(path)) Some(key -> path)
-            else None
-        })
-    }.toMap
+    val libraries = new ju.HashMap[String, PantsLibrary]
+    for {
+      (libraryName, valueObj) <- allLibraries.iterator
+    } {
+      // The "$ORGANIZATION:$ARTIFACT" part of Maven library coordinates.
+      val module = {
+        val colon = libraryName.lastIndexOf(':')
+        if (colon < 0) libraryName
+        else libraryName.substring(0, colon)
+      }
+      val values = valueObj.obj.flatMap {
+        case (key, value) =>
+          val path = Paths.get(value.str)
+          if (Files.exists(path)) Some(key -> path)
+          else None
+      }
+      libraries.put(libraryName, PantsLibrary(libraryName, module, values))
+    }
 
-    val cycles = Cycles.findConnectedComponents(targets)
+    val cycles = Cycles.findConnectedComponents(targets.asScala)
 
     val scalaPlatform = PantsScalaPlatform.fromJson(output)
 
     val jvmDistribution = PantsPreferredJvmDistribution.fromJson(output.obj)
 
     PantsExport(
-      targets = targets,
-      libraries = libraries,
+      targets = targets.asScala,
+      librariesJava = libraries,
       scalaPlatform = scalaPlatform,
       cycles = cycles,
       jvmDistribution = jvmDistribution
