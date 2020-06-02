@@ -66,8 +66,8 @@ object Project {
       json <- Try(ujson.read(root.bspJson.readText)).toOption
       targets <- json.obj.get("pantsTargets")
       sources = json.obj.get("sources") match {
-        case Some(Bool(true)) => true
-        case _ => false
+        case Some(Bool(bool)) => bool
+        case _ => true
       }
     } yield Project(
       common,
