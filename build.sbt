@@ -8,7 +8,32 @@ lazy val V = new {
   val scalameta = "4.3.10"
   val bsp = "2.0.0-M4+10-61e61e87"
   val metals = "0.9.0"
+  val munit = "0.7.7"
 }
+
+val MUnitFramework = new TestFramework("munit.Framework")
+
+val pantsCloneLocation = taskKey[File]("Location where to clone Pants")
+val pantsCloneUrl = taskKey[String]("URL from which to clone Pants")
+val pantsCloneBranch = taskKey[String]("Branch of Pants to clone")
+val pantsTestWorkspaceRoot =
+  taskKey[File]("Location from where to run pants in test")
+
+lazy val testSettings: Seq[Def.Setting[_]] = List(
+  Test / parallelExecution := false,
+  skip.in(publish) := true,
+  fork := true,
+  libraryDependencies += "org.scalameta" %% "munit" % V.munit,
+  testFrameworks := List(MUnitFramework),
+  testOptions.in(Test) ++= {
+    if (insideCI.value) {
+      // Enable verbose logging using sbt loggers in CI.
+      List(Tests.Argument(MUnitFramework, "+l", "--verbose"))
+    } else {
+      Nil
+    }
+  }
+)
 
 onLoad.in(Global) ~= { old =>
   if (!scala.util.Properties.isWin) {
@@ -54,6 +79,15 @@ inThisBuild(
         "martin.duhem@gmail.com",
         url("https://github.com/Duhemm")
       )
+    ),
+    scalaVersion := V.scala212,
+    crossScalaVersions := List(V.scala212),
+    scalacOptions ++= List(
+      "-target:jvm-1.8",
+      "-Yrangepos",
+      // -Xlint is unusable because of
+      // https://github.com/scala/bug/issues/10448
+      "-Ywarn-unused:imports"
     )
   )
 )
@@ -141,4 +175,29 @@ lazy val fastpass = project
         "-H:+ReportExceptionStackTraces"
       )
     }
+  )
+
+lazy val slow = project
+  .in(file("tests/slow"))
+  .enablePlugins(BuildInfoPlugin)
+  .dependsOn(fastpass)
+  .settings(
+    testSettings,
+    inConfig(Test)(
+      Seq(
+        pantsCloneLocation := target.value / "pants",
+        pantsCloneUrl := PantsRepo.url,
+        pantsCloneBranch := PantsRepo.branch,
+        pantsTestWorkspaceRoot := target.value / "pants-test",
+        buildInfoKeys := Seq[BuildInfoKey](
+          pantsCloneLocation,
+          pantsCloneUrl,
+          pantsCloneBranch,
+          pantsTestWorkspaceRoot,
+          insideCI
+        ),
+        buildInfoPackage := "tests.build"
+      )
+    ),
+    BuildInfoPlugin.buildInfoScopedSettings(Test)
   )

@@ -1,7 +1,6 @@
 package scala.meta.internal.fastpass.pantsbuild
 
 import java.nio.file.Path
-import java.nio.file.Files
 import scala.meta.io.AbsolutePath
 
 case class PantsTarget(

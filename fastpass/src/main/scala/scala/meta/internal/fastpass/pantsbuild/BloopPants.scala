@@ -151,7 +151,7 @@ object BloopPants {
   )(implicit ec: ExecutionContext): Unit = {
     val noSources = if (args.isSources) "" else "no-"
     val command = List[String](
-      args.workspace.resolve("pants").toString(),
+      args.common.pants.toString(),
       "--concurrent",
       s"--no-quiet",
       s"--${noSources}export-dep-as-jar-sources",
@@ -179,7 +179,9 @@ object BloopPants {
         command,
         command,
         args.workspace,
-        args.token
+        args.token,
+        args.app.out,
+        args.app.err
       )
     } finally {
       bloopSymlinkTarget.foreach { target =>
