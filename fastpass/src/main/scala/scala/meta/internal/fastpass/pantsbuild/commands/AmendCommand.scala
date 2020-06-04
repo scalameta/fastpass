@@ -101,7 +101,7 @@ object AmendCommand extends Command[AmendOptions]("amend") {
     } else {
       val newProject = project.copy(targets = newTargets.toList)
       if (newTargets != project.targets) {
-        IntelliJ.writeBsp(newProject)
+        IntelliJ.writeBsp(newProject, amend.common)
         RefreshCommand.run(
           RefreshOptions(
             projects = amend.projects,

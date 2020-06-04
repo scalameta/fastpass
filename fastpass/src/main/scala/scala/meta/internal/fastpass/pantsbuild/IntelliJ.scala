@@ -23,6 +23,8 @@ import ujson.Obj
 import ujson.Str
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.fastpass.Fastpass
+import scala.meta.internal.fastpass.pantsbuild.commands.SharedCommand
+import scala.meta.internal.fastpass.pantsbuild.commands.SharedOptions
 
 object IntelliJ {
   def launch(project: Project, open: OpenOptions): Unit = {
@@ -60,9 +62,11 @@ object IntelliJ {
   /** The .bsp/bloop.json file is necessary for IntelliJ to automatically import the project */
   def writeBsp(
       project: Project,
+      shared: SharedOptions,
       coursierBinary: Option[Path] = None,
       exportResult: Option[PantsExportResult] = None
   ): Unit = {
+    SharedCommand.runScalafmtSymlink(project, shared)
     val bspJson = project.root.bspJson.toNIO
     Files.createDirectories(bspJson.getParent)
     val coursier = coursierBinary.getOrElse(

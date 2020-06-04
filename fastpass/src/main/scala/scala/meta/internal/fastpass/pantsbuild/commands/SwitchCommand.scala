@@ -99,26 +99,7 @@ object SwitchCommand extends Command[SwitchOptions]("switch") {
       Files.deleteIfExists(workspaceBloop)
       Files.createSymbolicLink(workspaceBloop, outBloop)
     }
-
-    val inScalafmt = {
-      var link = workspace.resolve(".scalafmt.conf")
-      // Configuration file may be symbolic link.
-      while (Files.isSymbolicLink(link)) {
-        link = Files.readSymbolicLink(link)
-      }
-      // Symbolic link may be relative to workspace directory.
-      if (link.isAbsolute()) link
-      else workspace.resolve(link)
-    }
-    val outScalafmt = out.resolve(".scalafmt.conf")
-    if (!out.startsWith(workspace) &&
-      Files.exists(inScalafmt) && {
-        !Files.exists(outScalafmt) ||
-        Files.isSymbolicLink(outScalafmt)
-      }) {
-      Files.deleteIfExists(outScalafmt)
-      Files.createSymbolicLink(outScalafmt, inScalafmt)
-    }
+    SharedCommand.runScalafmtSymlink(project, common)
   }
 
   private def warnBloopDirectory(
