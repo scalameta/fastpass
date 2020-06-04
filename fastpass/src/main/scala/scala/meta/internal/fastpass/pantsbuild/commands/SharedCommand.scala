@@ -228,4 +228,32 @@ object SharedCommand {
     )
   }
 
+  def runScalafmtSymlink(
+      project: Project,
+      common: SharedOptions
+  ): Unit = {
+    val workspace = common.workspace
+    val out = project.root.bspRoot.toNIO
+    val inScalafmt = {
+      var link = workspace.resolve(".scalafmt.conf")
+      // Configuration file may be symbolic link.
+      while (Files.isSymbolicLink(link)) {
+        link = Files.readSymbolicLink(link)
+      }
+      // Symbolic link may be relative to workspace directory.
+      if (link.isAbsolute()) link
+      else workspace.resolve(link)
+    }
+    val outScalafmt = out.resolve(".scalafmt.conf")
+    if (!out.startsWith(workspace) &&
+      Files.exists(inScalafmt) && {
+        !Files.exists(outScalafmt) ||
+        Files.isSymbolicLink(outScalafmt)
+      }) {
+      Files.deleteIfExists(outScalafmt)
+      Files.createDirectories(outScalafmt.getParent())
+      Files.createSymbolicLink(outScalafmt, inScalafmt)
+    }
+  }
+
 }
