@@ -99,7 +99,15 @@ object SwitchCommand extends Command[SwitchOptions]("switch") {
       Files.deleteIfExists(workspaceBloop)
       Files.createSymbolicLink(workspaceBloop, outBloop)
     }
+    runScalafmtSymlink(project, common)
+  }
 
+  def runScalafmtSymlink(
+      project: Project,
+      common: SharedOptions
+  ): Unit = {
+    val workspace = common.workspace
+    val out = project.root.bspRoot.toNIO
     val inScalafmt = {
       var link = workspace.resolve(".scalafmt.conf")
       // Configuration file may be symbolic link.
@@ -117,6 +125,7 @@ object SwitchCommand extends Command[SwitchOptions]("switch") {
         Files.isSymbolicLink(outScalafmt)
       }) {
       Files.deleteIfExists(outScalafmt)
+      Files.createDirectories(outScalafmt.getParent())
       Files.createSymbolicLink(outScalafmt, inScalafmt)
     }
   }

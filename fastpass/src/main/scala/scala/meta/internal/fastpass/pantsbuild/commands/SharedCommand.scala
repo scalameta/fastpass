@@ -61,6 +61,7 @@ object SharedCommand {
         case Success(exportResult) =>
           IntelliJ.writeBsp(
             export.project,
+            export.common,
             export.export.coursierBinary,
             exportResult
           )
