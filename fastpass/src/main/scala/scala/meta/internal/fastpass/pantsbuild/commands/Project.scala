@@ -4,14 +4,14 @@ import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.pantsbuild.PantsConfiguration
 import scala.meta.io.AbsolutePath
 import scala.util.Try
-import ujson.Bool
+import ujson.Str
 
 case class Project(
     common: SharedOptions,
     name: String,
     targets: List[String],
     root: ProjectRoot,
-    sources: Boolean
+    sources: Option[SourcesMode]
 ) {
   val fuzzyName: String = PantsConfiguration.outputFilename(name)
   def matchesName(query: String): Boolean =
@@ -24,7 +24,7 @@ object Project {
       name: String,
       common: SharedOptions,
       targets: List[String],
-      sources: Boolean
+      sources: Option[SourcesMode]
   ): Project = {
     Project(
       common,
@@ -66,8 +66,8 @@ object Project {
       json <- Try(ujson.read(root.bspJson.readText)).toOption
       targets <- json.obj.get("pantsTargets")
       sources = json.obj.get("sources") match {
-        case Some(Bool(bool)) => bool
-        case _ => true
+        case Some(Str(str)) => Some(SourcesMode.parse(str))
+        case _ => None
       }
     } yield Project(
       common,

@@ -149,13 +149,17 @@ object BloopPants {
       args: Export,
       outputFile: Path
   )(implicit ec: ExecutionContext): Unit = {
-    val noSources = if (args.isSources) "" else "no-"
+    val noInternalSources =
+      if (args.export.disableSources || args.export.onDemandSources) "no-"
+      else ""
+    val no3rdPartySources = if (args.export.disableSources) "no-" else ""
+
     val command = List[String](
       args.workspace.resolve("pants").toString(),
       "--concurrent",
       s"--no-quiet",
-      s"--${noSources}export-dep-as-jar-sources",
-      s"--${noSources}export-dep-as-jar-libraries-sources",
+      s"--${noInternalSources}export-dep-as-jar-sources",
+      s"--${no3rdPartySources}export-dep-as-jar-libraries-sources",
       s"--export-dep-as-jar-output-file=$outputFile",
       s"export-dep-as-jar",
       "--respect-strict-deps"
@@ -257,7 +261,6 @@ private class BloopPants(
   private val scalaCompiler = "org.scala-lang:scala-compiler:"
   private val transitiveClasspath = new ju.HashMap[String, List[Path]]().asScala
   private val isVisited = mutable.Set.empty[String]
-  private val binaryDependencySources = mutable.Set.empty[Path]
 
   val compilerVersion: String = export.libraries.keysIterator
     .collectFirst {
@@ -290,7 +293,6 @@ private class BloopPants(
   private val sourcesJars = ju.Collections.newSetFromMap(
     new ju.IdentityHashMap[PantsLibrary, java.lang.Boolean]
   )
-  private val immutableJars = mutable.Map.empty[Path, Path]
   val allScalaJars: List[Path] =
     export.scalaPlatform.compilerClasspath
       .map(jar => toImmutableJar(jar.getFileName.toString, jar))
@@ -476,23 +478,29 @@ private class BloopPants(
     classpathEntries.iterator.asScala.toList
   }
 
-  def getResolution(libraries: ClasspathLibraries): Option[C.Resolution] = Some(
-    C.Resolution(
-      (for {
-        // NOTE(olafur): we don't include sources of runtime libraries
-        // to reduce the amount of sources.jar to index in IntelliJ.
-        library <- libraries.compile.iterator
-        // NOTE(olafur): avoid sending the same *-sources.jar to reduce the
-        // size of the Bloop JSON configs. Both IntelliJ and Metals only need each
-        // jar to appear once.
-        if !sourcesJars.contains(library)
-        source <- library.sources
-      } yield {
-        sourcesJars.add(library)
-        newSourceModule(source)
-      }).toList
-    )
-  )
+  def getResolution(libraries: ClasspathLibraries): Option[C.Resolution] = {
+    if (args.export.onDemandSources) {
+      None
+    } else {
+      Some(
+        C.Resolution(
+          (for {
+            // NOTE(olafur): we don't include sources of runtime libraries
+            // to reduce the amount of sources.jar to index in IntelliJ.
+            library <- libraries.compile.iterator
+            // NOTE(olafur): avoid sending the same *-sources.jar to reduce the
+            // size of the Bloop JSON configs. Both IntelliJ and Metals only need each
+            // jar to appear once.
+            if !sourcesJars.contains(library)
+            source <- library.sources
+          } yield {
+            sourcesJars.add(library)
+            newSourceModule(source)
+          }).toList
+        )
+      )
+    }
+  }
 
   private def toBloopProject(target: PantsTarget): C.Project = {
 

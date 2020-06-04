@@ -20,7 +20,6 @@ case class Export(
     token: CancelChecker = () => ()
 ) {
   def bloopDir = out.resolve(".bloop")
-  def isSources: Boolean = !export.disableSources
   def isMergeTargetsInSameDirectory: Boolean =
     export.mergeTargetsInSameDirectory
   def root = project.root

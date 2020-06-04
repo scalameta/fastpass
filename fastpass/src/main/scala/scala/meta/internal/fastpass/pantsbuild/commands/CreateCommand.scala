@@ -52,7 +52,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
           name,
           create.common,
           create.targets,
-          sources = !create.export.disableSources
+          sources = Some(create.export.sourcesMode)
         )
         SharedCommand.interpretExport(
           Export(project, create.open, app).copy(export = create.export)
