@@ -172,13 +172,9 @@ object SharedCommand {
       context: TabCompletionContext,
       allowsMultipleProjects: Boolean = false
   ): List[TabCompletionItem] = {
-    context.setting match {
-      case None =>
-        Project
-          .fromCommon(SharedOptions())
-          .map(project => TabCompletionItem(project.name))
-      case Some(_) => Nil
-    }
+    Project
+      .fromCommon(SharedOptions())
+      .map(project => TabCompletionItem(project.name))
   }
 
   /** Upgrades the Bloop server if it's known to be an old version. */

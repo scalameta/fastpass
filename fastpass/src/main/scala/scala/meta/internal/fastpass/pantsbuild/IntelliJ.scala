@@ -172,6 +172,10 @@ object IntelliJ {
         libraries(default.toString()) = Str(sources.toString())
       }
     }
+    export.internalSources.foreach {
+      case (default, sources) =>
+        libraries(default.toString()) = Str(sources.toString())
+    }
     project.root.pantsLibrariesJson.writeText(ujson.write(libraries))
   }
 }

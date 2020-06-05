@@ -23,6 +23,7 @@ object RefreshCommand extends Command[RefreshOptions]("refresh") {
   ): List[TabCompletionItem] =
     SharedCommand.complete(context, allowsMultipleProjects = true)
   def run(refresh: RefreshOptions, app: CliApp): Int = {
+    pprint.log(refresh.common.workspace)
     val projects = Project.fromCommon(refresh.common)
     val errors = refresh.projects.map { projectName =>
       projects.find(_.matchesName(projectName)) match {
