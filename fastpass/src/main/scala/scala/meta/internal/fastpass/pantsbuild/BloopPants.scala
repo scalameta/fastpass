@@ -150,9 +150,9 @@ object BloopPants {
       outputFile: Path
   )(implicit ec: ExecutionContext): Unit = {
     val noInternalSources =
-      if (args.export.disableSources || args.export.onDemandSources) "no-"
+      if (args.sources.isOff || args.sources.isOnDemand) "no-"
       else ""
-    val no3rdPartySources = if (args.export.disableSources) "no-" else ""
+    val no3rdPartySources = if (args.sources.isOff) "no-" else ""
 
     val command = List[String](
       args.workspace.resolve("pants").toString(),
@@ -479,7 +479,7 @@ private class BloopPants(
   }
 
   def getResolution(libraries: ClasspathLibraries): Option[C.Resolution] = {
-    if (args.export.onDemandSources) {
+    if (args.sources.isOnDemand) {
       None
     } else {
       Some(

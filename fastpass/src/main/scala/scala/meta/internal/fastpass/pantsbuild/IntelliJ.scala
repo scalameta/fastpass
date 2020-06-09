@@ -82,9 +82,7 @@ object IntelliJ {
       "--",
       V.bloopVersion
     )
-    project.sources.foreach(sourcesMode =>
-      newJson("sources") = sourcesMode.toString
-    )
+    newJson("sources") = project.sources.toNonDefault.toString
     newJson("pantsTargets") = project.targets
     newJson("fastpassVersion") = V.fastpassVersion
     newJson("fastpassProjectName") = project.name

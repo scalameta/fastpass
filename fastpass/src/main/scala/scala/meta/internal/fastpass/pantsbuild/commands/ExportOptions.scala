@@ -11,7 +11,7 @@ case class ExportOptions(
         "Use 'on' to download and link te sources automatically. " +
         "Use 'on-demand' to download sources and allow linking them later."
     )
-    sources: Option[String] = None,
+    sources: SourcesMode = SourcesMode.Default,
     @Description(
       "The path to the coursier binary." +
         "If unspecified, coursier will be downloaded automatically."
@@ -24,13 +24,6 @@ case class ExportOptions(
     mergeTargetsInSameDirectory: Boolean = false
 ) {
   def canBloopExit: Boolean = !noBloopExit
-
-  def disableSources: Boolean = sourcesMode == SourcesMode.Off
-  def enableSources: Boolean = sourcesMode == SourcesMode.On
-  def onDemandSources: Boolean = sourcesMode == SourcesMode.OnDemand
-
-  lazy val sourcesMode: SourcesMode =
-    sources.map(SourcesMode.parse).getOrElse(SourcesMode.On)
 }
 
 object ExportOptions {
