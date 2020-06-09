@@ -78,7 +78,7 @@ object IntelliJ {
     newJson("bspVersion") = V.bspVersion
     newJson("languages") = List[String]("scala", "java")
     newJson("argv") = List[String](
-      coursier.toString(),
+      coursier.toString,
       "launch",
       s"ch.epfl.scala:bloop-launcher-core_2.12:${V.bloopNightlyVersion}",
       "--ttl",
@@ -86,7 +86,7 @@ object IntelliJ {
       "--",
       V.bloopVersion
     )
-    newJson("sources") = project.sources
+    newJson("sources") = project.sources.toNonDefault.toString
     newJson("pantsTargets") = project.targets
     newJson("fastpassVersion") = V.fastpassVersion
     newJson("fastpassProjectName") = project.name

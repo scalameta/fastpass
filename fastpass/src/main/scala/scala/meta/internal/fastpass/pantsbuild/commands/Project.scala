@@ -4,6 +4,8 @@ import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.pantsbuild.PantsConfiguration
 import scala.meta.io.AbsolutePath
 import scala.util.Try
+import ujson.Str
+import metaconfig.Conf
 import ujson.Bool
 
 case class Project(
@@ -11,7 +13,7 @@ case class Project(
     name: String,
     targets: List[String],
     root: ProjectRoot,
-    sources: Boolean
+    sources: SourcesMode
 ) {
   val fuzzyName: String = PantsConfiguration.outputFilename(name)
   def matchesName(query: String): Boolean =
@@ -24,7 +26,7 @@ object Project {
       name: String,
       common: SharedOptions,
       targets: List[String],
-      sources: Boolean
+      sources: SourcesMode
   ): Project = {
     Project(
       common,
@@ -65,17 +67,23 @@ object Project {
       if root.bspJson.isFile
       json <- Try(ujson.read(root.bspJson.readText)).toOption
       targets <- json.obj.get("pantsTargets")
-      sources = json.obj.get("sources") match {
-        case Some(Bool(bool)) => bool
-        case _ => true
-      }
-    } yield Project(
-      common,
-      project.filename,
-      targets.arr.map(_.str).toList,
-      root,
-      sources
-    )
+    } yield {
+      val sources: SourcesMode = json.obj
+        .get("sources")
+        .collect {
+          case Bool(bool) => Conf.Bool(bool)
+          case Str(str) => Conf.Str(str)
+        }
+        .flatMap(c => SourcesMode.decoder.read(c).toEither.toOption)
+        .getOrElse(SourcesMode.Default)
+      Project(
+        common,
+        project.filename,
+        targets.arr.map(_.str).toList,
+        root,
+        sources
+      )
+    }
   }
 
 }

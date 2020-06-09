@@ -7,14 +7,11 @@ import java.nio.file.Path
 
 case class ExportOptions(
     @Description(
-      "Disable downloading of -sources.jar for 3rd party dependencies."
+      "Control sources. Use 'off' to disable downloading sources for 3rd party libraries. " +
+        "Use 'on' to download and link te sources automatically. " +
+        "Use 'on-demand' to download sources and allow linking them later."
     )
-    disableSources: Boolean = false,
-    @Description(
-      "Enable downloading of sources for 3rdparty dependencies. This flag has no impact unless " +
-        "downloading of sources has been disabled for this project via the --disable-sources flag."
-    )
-    enableSources: Boolean = false,
+    sources: SourcesMode = SourcesMode.Default,
     @Description(
       "The path to the coursier binary." +
         "If unspecified, coursier will be downloaded automatically."

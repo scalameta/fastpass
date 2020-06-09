@@ -29,11 +29,7 @@ object RefreshCommand extends Command[RefreshOptions]("refresh") {
         case Some(project) =>
           SharedCommand.interpretExport(
             Export(project, refresh.open, app).copy(
-              export = refresh.export.copy(
-                disableSources =
-                  (!project.sources || refresh.export.disableSources) &&
-                    !refresh.export.enableSources
-              ),
+              export = refresh.export.copy(sources = refresh.export.sources),
               isCache = refresh.update
             )
           )
