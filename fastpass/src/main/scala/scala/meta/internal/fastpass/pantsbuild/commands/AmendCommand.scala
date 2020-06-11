@@ -78,8 +78,9 @@ object AmendCommand extends Command[AmendOptions]("amend") {
         .asScala
         .flatMap { line =>
           if (line.startsWith("#")) Nil
-          else line.split(" ").toList
+          else line.trim.split("\\s").toList
         }
+        .filterNot(_.isEmpty())
         .toList
       Files.deleteIfExists(tmp)
       Some(newTargets)
