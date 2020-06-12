@@ -109,8 +109,10 @@ object SwitchCommand extends Command[SwitchOptions]("switch") {
       isError: Boolean
   ): Boolean = {
     val bloopDirectory = common.bloopDirectory
-    if (Files.isDirectory(bloopDirectory) &&
-      !Files.isSymbolicLink(bloopDirectory)) {
+    if (
+      Files.isDirectory(bloopDirectory) &&
+      !Files.isSymbolicLink(bloopDirectory)
+    ) {
       val relpath = app.workingDirectory.relativize(bloopDirectory)
       val message =
         s"unable to link project '${project.name}' because '$bloopDirectory' is a directory. " +

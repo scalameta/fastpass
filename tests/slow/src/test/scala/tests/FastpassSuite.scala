@@ -115,7 +115,9 @@ trait FastpassSuite extends munit.FunSuite with BloopAssertions {
           ): FileVisitResult = {
             if (dir != root && dir != workspace && dir != pantsDir) {
               try Files.delete(dir)
-              catch { case _: DirectoryNotEmptyException => () } // Happens sometimes on Windows?
+              catch {
+                case _: DirectoryNotEmptyException => ()
+              } // Happens sometimes on Windows?
             }
             FileVisitResult.CONTINUE
           }
