@@ -9,51 +9,61 @@ import java.nio.file.Paths
 trait BloopAssertions extends munit.Assertions {
   implicit class ProjectAssertions(val project: Project) {
 
-    def dependsOn(other: Project): Project = chain {
-      assert(
-        project.dependencies.contains(other.name),
-        s"`${project.name}` doesn't depend on `${other.name}`."
-      )
-    }
+    def dependsOn(other: Project): Project =
+      chain {
+        assert(
+          project.dependencies.contains(other.name),
+          s"`${project.name}` doesn't depend on `${other.name}`."
+        )
+      }
 
-    def doesntDependOn(other: Project): Project = chain {
-      assert(
-        !project.dependencies.contains(other.name),
-        s"`${project.name}` depends on `${other.name}`."
-      )
-    }
+    def doesntDependOn(other: Project): Project =
+      chain {
+        assert(
+          !project.dependencies.contains(other.name),
+          s"`${project.name}` depends on `${other.name}`."
+        )
+      }
 
-    def doesntHaveBinaryOnCompileClasspath(jar: String): Project = chain {
-      assertClasspathDoesntContain(project.classpath, jar)
-    }
+    def doesntHaveBinaryOnCompileClasspath(jar: String): Project =
+      chain {
+        assertClasspathDoesntContain(project.classpath, jar)
+      }
 
-    def hasBinaryOnCompileClasspath(jar: String): Project = chain {
-      assertClasspathContains(project.classpath, jar)
-    }
+    def hasBinaryOnCompileClasspath(jar: String): Project =
+      chain {
+        assertClasspathContains(project.classpath, jar)
+      }
 
-    def doesntHaveBinaryOnRuntimeClasspath(jar: String): Project = chain {
-      onRuntimeClasspath(assertClasspathDoesntContain(_, jar))
-    }
+    def doesntHaveBinaryOnRuntimeClasspath(jar: String): Project =
+      chain {
+        onRuntimeClasspath(assertClasspathDoesntContain(_, jar))
+      }
 
-    def hasBinaryOnRuntimeClasspath(jar: String): Project = chain {
-      onRuntimeClasspath(assertClasspathContains(_, jar))
-    }
+    def hasBinaryOnRuntimeClasspath(jar: String): Project =
+      chain {
+        onRuntimeClasspath(assertClasspathContains(_, jar))
+      }
 
-    def doesntHaveProjectOnCompileClasspath(other: Project): Project = chain {
-      assertClasspathDoesntContain(project.classpath, other.classesDir)
-    }
+    def doesntHaveProjectOnCompileClasspath(other: Project): Project =
+      chain {
+        assertClasspathDoesntContain(project.classpath, other.classesDir)
+      }
 
-    def hasProjectOnCompileClasspath(other: Project): Project = chain {
-      assertClasspathContains(project.classpath, other.classesDir)
-    }
+    def hasProjectOnCompileClasspath(other: Project): Project =
+      chain {
+        assertClasspathContains(project.classpath, other.classesDir)
+      }
 
-    def doesntHaveProjectOnRuntimeClasspath(other: Project): Project = chain {
-      onRuntimeClasspath(assertClasspathDoesntContain(_, other.classesDir))
-    }
+    def doesntHaveProjectOnRuntimeClasspath(other: Project): Project =
+      chain {
+        onRuntimeClasspath(assertClasspathDoesntContain(_, other.classesDir))
+      }
 
-    def hasProjectOnRuntimeClasspath(other: Project): Project = chain {
-      onRuntimeClasspath(assertClasspathContains(_, other.classesDir))
-    }
+    def hasProjectOnRuntimeClasspath(other: Project): Project =
+      chain {
+        onRuntimeClasspath(assertClasspathContains(_, other.classesDir))
+      }
 
     private def onRuntimeClasspath(op: List[Path] => Unit): Unit = {
       project.platform match {

@@ -245,11 +245,13 @@ object SharedCommand {
       else workspace.resolve(link)
     }
     val outScalafmt = out.resolve(".scalafmt.conf")
-    if (!out.startsWith(workspace) &&
+    if (
+      !out.startsWith(workspace) &&
       Files.exists(inScalafmt) && {
         !Files.exists(outScalafmt) ||
         Files.isSymbolicLink(outScalafmt)
-      }) {
+      }
+    ) {
       Files.deleteIfExists(outScalafmt)
       Files.createDirectories(outScalafmt.getParent())
       Files.createSymbolicLink(outScalafmt, inScalafmt)
