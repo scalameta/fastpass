@@ -3,18 +3,18 @@ package scala.meta.internal.fastpass.pantsbuild
 import scala.collection.mutable
 import bloop.config.Config.CompileSetup
 import java.{util => ju}
+import scala.meta.internal.fastpass.pantsbuild.commands.StrictDepsMode
 
 /**
  * Implementation of the Pants build graph traversal to compute the JVM compile-time classpath.
  */
-class CompileBFS(export: PantsExport) {
+class CompileBFS(export: PantsExport, mode: StrictDepsMode) {
   private val exportsCache = mutable.Map.empty[String, Iterable[PantsTarget]]
   private val runtime = new RuntimeBFS(export, CompileScope)
   private val isInProgress = new ju.HashSet[String]
 
   def dependencies(target: PantsTarget): Iterable[PantsTarget] = {
-    // TODO(olafur): make it configurable how strict_deps is interpreted.
-    if (!target.strictDeps) {
+    if (mode.isTransitive || !target.strictDeps) {
       // Use the same classpath as at runtime
       runtime.dependencies(target)
     } else {
@@ -23,6 +23,14 @@ class CompileBFS(export: PantsExport) {
       result ++= dependencies
       target.dependencies.foreach { dependencyName =>
         result ++= dependencyExports(dependencyName)
+      }
+      if (mode.isPlusOne) {
+        for {
+          dependency <- dependencies
+          transitive <- dependency.dependencies
+        } {
+          result ++= dependencyExports(transitive)
+        }
       }
       result
     }

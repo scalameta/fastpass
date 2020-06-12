@@ -30,7 +30,10 @@ object RefreshCommand extends Command[RefreshOptions]("refresh") {
         case Some(project) =>
           SharedCommand.interpretExport(
             Export(project, refresh.open, app).copy(
-              export = refresh.export.copy(sources = refresh.export.sources),
+              export = refresh.export.copy(
+                sources = refresh.export.sources,
+                strictDeps = refresh.export.strictDeps
+              ),
               isCache = refresh.update
             )
           )

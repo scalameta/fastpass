@@ -424,7 +424,7 @@ private class BloopPants(
   }
 
   val runtime = new RuntimeBFS(export, RuntimeScope)
-  val compile = new CompileBFS(export)
+  val compile = new CompileBFS(export, args.strictDeps)
 
   def computeClasspath(
       target: PantsTarget,
@@ -436,7 +436,6 @@ private class BloopPants(
     for {
       dependency <- transitiveDependencies.iterator
     } {
-      // TODO(olafur): skip synthetic "unstable" targets for scoped dependencies
       if (dependency.isModulizable) {
         classpathEntries.add(dependency.classesDir)
       } else {

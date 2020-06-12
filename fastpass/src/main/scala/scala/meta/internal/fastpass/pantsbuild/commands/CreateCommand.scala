@@ -52,7 +52,8 @@ object CreateCommand extends Command[CreateOptions]("create") {
           name,
           create.common,
           create.targets,
-          sources = create.export.sources.toNonDefault
+          sources = create.export.sources.toNonDefault,
+          strictDeps = create.export.strictDeps.toNonDefault
         )
         SharedCommand.interpretExport(
           Export(project, create.open, app).copy(export = create.export)

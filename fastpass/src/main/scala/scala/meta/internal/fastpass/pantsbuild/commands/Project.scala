@@ -13,7 +13,8 @@ case class Project(
     name: String,
     targets: List[String],
     root: ProjectRoot,
-    sources: SourcesMode
+    sources: SourcesMode,
+    strictDeps: StrictDepsMode
 ) {
   val fuzzyName: String = PantsConfiguration.outputFilename(name)
   def matchesName(query: String): Boolean =
@@ -27,14 +28,16 @@ object Project {
       name: String,
       common: SharedOptions,
       targets: List[String],
-      sources: SourcesMode
+      sources: SourcesMode,
+      strictDeps: StrictDepsMode
   ): Project = {
     Project(
       common,
       name,
       targets,
       ProjectRoot(common.home.resolve(name)),
-      sources
+      sources,
+      strictDeps
     )
   }
   def names(common: SharedOptions): List[String] =
@@ -80,12 +83,20 @@ object Project {
         }
         .flatMap(c => SourcesMode.decoder.read(c).toEither.toOption)
         .getOrElse(SourcesMode.Default)
+      val strictDeps: StrictDepsMode = json.obj
+        .get("strictDeps")
+        .collect {
+          case Str(str) => Conf.Str(str)
+        }
+        .flatMap(c => StrictDepsMode.decoder.read(c).toEither.toOption)
+        .getOrElse(StrictDepsMode.Default)
       Project(
         common,
         project.filename,
         targets.arr.map(_.str).toList,
         root,
-        sources
+        sources,
+        strictDeps
       )
     }
   }
