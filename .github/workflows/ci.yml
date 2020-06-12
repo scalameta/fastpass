@@ -11,11 +11,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macOS-latest, ubuntu-latest]
+        os: [macOS-latest, ubuntu-latest]
         java: [8, 11]
         exclude:
-          - os: windows-latest
-            java: 8
           - os: macOS-latest
             java: 8
         include:
@@ -23,8 +21,6 @@ jobs:
             CACHE_PATH: ~/.cache/coursier/v1
           - os: macOS-latest
             CACHE_PATH: ~/Library/Caches/Coursier/v1
-          - os: windows-latest
-            CACHE_PATH: ~\AppData\Local\Coursier\Cache\v1
     steps:
       - uses: actions/checkout@v2
       - uses: olafurpg/setup-scala@v7
@@ -42,5 +38,15 @@ jobs:
           key: |
             ${{ runner.os }}-sbt-${{ hashFiles('project/build.properties') }}-${{ hashFiles('project/plugins.sbt') }}
           restore-keys: ${{ runner.os }}-sbt-
+      - uses: actions/cache@v1
+        with:
+          path: tests/slow/target/pants
+          key: ${{ runner.os }}-pants-repo-${{ hashFiles('project/PantsRepo.scala') }}
+          restore-keys: ${{ runner.os }}-pants-repo-${{ hashFiles('project/PantsRepo.scala') }}
+      - uses: actions/cache@v1
+        with:
+          path: ~/.cache/pants
+          key: ${{ runner.os }}-pants-cache
+          restore-keys: ${{ runner.os }}-pants-cache
       - run: sbt test
         shell: bash

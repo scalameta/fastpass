@@ -12,9 +12,10 @@ import scala.meta.internal.io.PathIO
 
 case class SharedOptions(
     @Description("The root directory of the Pants build.")
-    workspace: Path = PathIO.workingDirectory.toNIO
+    workspace: Path = PathIO.workingDirectory.toNIO,
+    @Description("The path to the `pants` executable.")
+    pants: Path = PathIO.workingDirectory.toNIO.resolve("pants")
 ) {
-  val pants: AbsolutePath = AbsolutePath(workspace.resolve("pants"))
   def bloopDirectory: Path = workspace.resolve(".bloop")
   val home: AbsolutePath = AbsolutePath {
     Option(System.getenv("FASTPASS_HOME")) match {

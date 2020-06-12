@@ -155,7 +155,7 @@ object BloopPants {
     val no3rdPartySources = if (args.sources.isOff) "no-" else ""
 
     val command = List[String](
-      args.workspace.resolve("pants").toString(),
+      args.common.pants.toString(),
       "--concurrent",
       s"--no-quiet",
       s"--${noInternalSources}export-dep-as-jar-sources",
@@ -183,7 +183,9 @@ object BloopPants {
         command,
         command,
         args.workspace,
-        args.token
+        args.token,
+        args.app.out,
+        args.app.err
       )
     } finally {
       bloopSymlinkTarget.foreach { target =>
