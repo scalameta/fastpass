@@ -93,7 +93,7 @@ object Project {
       Project(
         common,
         project.filename,
-        targets.arr.map(_.str).toList,
+        targets.arr.iterator.map(_.str).filter(_.nonEmpty).toList,
         root,
         sources,
         strictDeps

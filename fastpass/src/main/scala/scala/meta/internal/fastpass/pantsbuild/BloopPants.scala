@@ -48,6 +48,7 @@ import java.nio.file.FileVisitResult
 import java.nio.file.PathMatcher
 import scala.meta.internal.io.FileIO
 import java.util.concurrent.ConcurrentHashMap
+import scala.meta.internal.io.PathIO
 
 object BloopPants {
   lazy val app: CliApp = CliApp(
@@ -165,14 +166,13 @@ object BloopPants {
     val no3rdPartySources = if (args.sources.isOff) "no-" else ""
 
     val command = List[String](
-      args.common.pants.toString(),
+      args.common.pantsBinary.toString(),
       "--concurrent",
       s"--no-quiet",
       s"--${noInternalSources}export-fastpass-sources",
       s"--${no3rdPartySources}export-fastpass-libraries-sources",
       s"--export-fastpass-output-file=$outputFile",
-      s"export-fastpass",
-      "--respect-strict-deps"
+      s"export-fastpass"
     ) ++ args.targets
     val shortName = "pants export-fastpass"
     val bloopSymlink = args.workspace.resolve(".bloop")

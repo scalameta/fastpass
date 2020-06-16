@@ -43,7 +43,7 @@ object PantsExport {
       (name, valueObj) <- allTargets.iterator
     } {
       val value = valueObj.obj
-      val directDependencies = value(PantsKeys.targets).arr.map(_.str)
+      val directDependencies = value(PantsKeys.dependencies).arr.map(_.str)
       val syntheticDependencies: Iterable[String] =
         if (args.isMergeTargetsInSameDirectory) {
           targetsByDirectory

@@ -6,6 +6,7 @@ import scala.meta.internal.fastpass.pantsbuild.MessageOnlyException
 import scala.concurrent.ExecutionContext
 import org.eclipse.lsp4j.jsonrpc.CancelChecker
 import scala.sys.process._
+import java.io.PrintStream
 
 object SystemProcess {
   def run(
@@ -14,12 +15,12 @@ object SystemProcess {
       reproduceArgs: List[String],
       cwd: Path,
       token: CancelChecker,
-      out: OutputStream,
-      err: OutputStream
+      out: PrintStream,
+      err: PrintStream
   )(implicit ec: ExecutionContext): Unit = {
     val processLogger = ProcessLogger(
-      line => out.write(line.getBytes),
-      line => err.write(line.getBytes)
+      line => out.println(line),
+      line => err.println(line)
     )
     val exportTimer = new Timer(Time.system)
     scribe.info(args.mkString("process: ", " ", ""))
