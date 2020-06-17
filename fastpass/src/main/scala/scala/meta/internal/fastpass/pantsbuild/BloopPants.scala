@@ -118,8 +118,7 @@ object BloopPants {
       val cacheDir = Files.createDirectories(
         args.workspace.resolve(".pants.d").resolve("metals")
       )
-      val outputFilename = PantsConfiguration.outputFilename(args.targets)
-      val outputFile = cacheDir.resolve(s"$outputFilename-export.json")
+      val outputFile = cacheDir.resolve(s"${args.project.name}-export.json")
       val bloopDir = args.bloopDir
       if (Files.isSymbolicLink(bloopDir)) {
         Files.delete(bloopDir)

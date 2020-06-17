@@ -28,7 +28,16 @@ object RefreshCommand extends Command[RefreshOptions]("refresh") {
       projects.find(_.matchesName(projectName)) match {
         case Some(project) =>
           SharedCommand.interpretExport(
-            Export(project, refresh.open, app).copy(
+            Export(
+              project.copy(
+                sources = refresh.export.sources
+                  .toNonDefaultWithFallback(project.sources),
+                strictDeps = refresh.export.strictDeps
+                  .toNonDefaultWithFallback(project.strictDeps)
+              ),
+              refresh.open,
+              app
+            ).copy(
               export = refresh.export.copy(
                 sources = refresh.export.sources,
                 strictDeps = refresh.export.strictDeps

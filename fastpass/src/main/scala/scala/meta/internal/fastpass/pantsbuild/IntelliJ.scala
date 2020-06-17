@@ -87,6 +87,7 @@ object IntelliJ {
       V.bloopVersion
     )
     newJson("sources") = project.sources.toNonDefault.toString
+    newJson("strictDeps") = project.strictDeps.toNonDefault.toString
     newJson("pantsTargets") = project.targets
     newJson("fastpassVersion") = V.fastpassVersion
     newJson("fastpassProjectName") = project.name

@@ -19,19 +19,20 @@ class CompileBFS(export: PantsExport, mode: StrictDepsMode) {
       runtime.dependencies(target)
     } else {
       val result = new mutable.LinkedHashSet[PantsTarget]()
-      val dependencies = target.dependencies.map(export.targets)
-      result ++= dependencies
-      target.dependencies.foreach { dependencyName =>
-        result ++= dependencyExports(dependencyName)
-      }
-      if (mode.isPlusOne) {
+      def loop(dep: PantsTarget, depth: Int): Unit = {
+        if (depth < 0) return
+        result ++= dep.dependencies.map(export.targets)
         for {
-          dependency <- dependencies
-          transitive <- dependency.dependencies
+          transitive <- dep.dependencies
         } {
           result ++= dependencyExports(transitive)
         }
+        val newDepth =
+          if (dep.pantsTargetType.isTarget) depth
+          else depth - 1
+        dep.dependencies.foreach(d => loop(export.targets(d), newDepth))
       }
+      loop(target, mode.plusDepth)
       result
     }
   }
