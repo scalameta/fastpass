@@ -40,7 +40,7 @@ class BloopPantsSuite extends FastpassSuite {
       .hasProjectOnRuntimeClasspath(projects("core:core"))
   }
 
-  test("respects strict_deps".fail) {
+  test("respects strict_deps") {
     val workspace = Workspace(s"""$pantsIni
                                  |/a/BUILD
                                  |scala_library(
@@ -68,7 +68,11 @@ class BloopPantsSuite extends FastpassSuite {
                                  |object C
                                  |""".stripMargin)
 
-    workspace.run("create" :: "--name" :: "test" :: "c::" :: Nil).succeeds
+    workspace
+      .run(
+        "create" :: "--name" :: "test" :: "--strict-deps=strict" :: "c::" :: Nil
+      )
+      .succeeds
     val projects0 = workspace.projects()
     assertEquals(projects0.keys, Set("c:c", "c-project-root"))
     projects0("c:c")

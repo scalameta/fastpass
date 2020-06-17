@@ -690,11 +690,12 @@ private class BloopPants(
           mutableClasspath.entries.zipWithIndex.flatMap {
             case (alias, i) =>
               val entry = alias.dealias
+              val suffix = if (i == 0) "" else s"-$i"
               if (entry.isDirectory) {
                 List(entry.toNIO)
               } else if (entry.isFile) {
                 List(
-                  toImmutableJar(s"${target.id}-$i.jar", entry.toNIO)
+                  toImmutableJar(s"${target.id}$suffix.jar", entry.toNIO)
                 )
               } else {
                 Nil
