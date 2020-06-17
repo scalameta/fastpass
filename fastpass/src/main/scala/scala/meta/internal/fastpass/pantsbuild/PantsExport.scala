@@ -7,12 +7,15 @@ import ujson.Obj
 import java.{util => ju}
 import scala.jdk.CollectionConverters._
 import java.nio.file.Path
+import ujson.Str
+import ujson.Bool
+import scala.meta.io.AbsolutePath
 
 case class PantsExport(
     targets: collection.Map[String, PantsTarget],
     librariesJava: ju.HashMap[String, PantsLibrary],
+    internalSourcesDir: Path,
     scalaPlatform: PantsScalaPlatform,
-    cycles: Cycles,
     jvmDistribution: PantsPreferredJvmDistribution
 ) {
   def libraries = librariesJava.asScala
@@ -21,28 +24,6 @@ case class PantsExport(
 object PantsExport {
   def fromJson(args: Export, output: ujson.Value): PantsExport = {
     val allTargets = output.obj("targets").obj
-    val transitiveDependencyCache = mutable.Map.empty[String, List[String]]
-    def computeTransitiveDependencies(name: String): List[String] = {
-      transitiveDependencyCache.getOrElseUpdate(
-        name, {
-          val isVisited = new mutable.LinkedHashSet[String]()
-          def visit(n: String): Unit = {
-            if (!isVisited(n)) {
-              isVisited += n
-              val target = allTargets(n).obj
-              for {
-                deps <- target.get(PantsKeys.targets).iterator
-                dep <- deps.arr.iterator.map(_.str)
-              } {
-                visit(dep)
-              }
-            }
-          }
-          visit(name)
-          isVisited.toList
-        }
-      )
-    }
     val targetsByDirectory = allTargets.keys.groupBy { name =>
       PantsConfiguration.baseDirectoryString(name)
     }
@@ -56,11 +37,13 @@ object PantsExport {
         case _ => Map.empty
       }
     val targets = new ju.HashMap[String, PantsTarget]
+    val internalSourcesDir =
+      Files.createDirectories(args.bloopDir.resolve("sources-jar"))
     for {
       (name, valueObj) <- allTargets.iterator
     } {
       val value = valueObj.obj
-      val directDependencies = value(PantsKeys.targets).arr.map(_.str)
+      val directDependencies = value(PantsKeys.dependencies).arr.map(_.str)
       val syntheticDependencies: Iterable[String] =
         if (args.isMergeTargetsInSameDirectory) {
           targetsByDirectory
@@ -73,6 +56,7 @@ object PantsExport {
           Nil
         }
       val dependencies = directDependencies ++ syntheticDependencies
+      val javaSources = asStringList(value, PantsKeys.javaSources)
       val excludes = new ju.HashSet[String]
       for {
         exclude <- value.get(PantsKeys.excludes).iterator
@@ -84,11 +68,8 @@ object PantsExport {
         platform <- value.get(PantsKeys.platform)
         javaHome <- jvmPlatforms.get(platform.str)
       } yield javaHome
-      val transitiveDependencies: Seq[String] =
-        value.get(PantsKeys.transitiveTargets) match {
-          case None => computeTransitiveDependencies(name)
-          case Some(transitiveDepencies) => transitiveDepencies.arr.map(_.str)
-        }
+      val libraries: mutable.ArrayBuffer[String] =
+        value(PantsKeys.libraries).arr.map(_.str.intern())
       val compileLibraries: mutable.ArrayBuffer[String] = value
         .getOrElse(PantsKeys.compileLibraries, value(PantsKeys.libraries))
         .arr
@@ -98,6 +79,7 @@ object PantsExport {
         .arr
         .map(_.str.intern())
       val isPantsTargetRoot = value(PantsKeys.isTargetRoot).bool
+      val isPantsModulizable = value(PantsKeys.isModulizable).bool
       val pantsTargetType =
         PantsTargetType(value(PantsKeys.pantsTargetType).str)
       val targetType =
@@ -116,16 +98,20 @@ object PantsExport {
       val classesDir: Path = Files.createDirectories(
         args.bloopDir.resolve(directoryName).resolve("classes")
       )
-      val target = PantsTarget(
+      val internalSourcesJar = internalSourcesDir.resolve(id + "-sources.jar")
+      val baseDirectory = PantsConfiguration
+        .baseDirectory(AbsolutePath(args.workspace), name)
+        .toNIO
+      val target = new PantsTarget(
         name = name,
         id = id,
         dependencies = dependencies,
+        javaSources = javaSources,
         excludes = excludes.asScala,
         platform = platform,
-        transitiveDependencies = transitiveDependencies,
-        compileLibraries = compileLibraries,
-        runtimeLibraries = runtimeLibraries,
+        libraries = libraries,
         isPantsTargetRoot = isPantsTargetRoot,
+        isPantsModulizable = isPantsModulizable,
         targetType = targetType,
         pantsTargetType = pantsTargetType,
         globs = PantsGlobs.fromJson(value),
@@ -134,7 +120,14 @@ object PantsExport {
         javacOptions = asStringList(value, PantsKeys.javacArgs),
         extraJvmOptions = asStringList(value, PantsKeys.extraJvmOptions),
         directoryName = directoryName,
-        classesDir = classesDir
+        baseDirectory = baseDirectory,
+        classesDir = classesDir,
+        internalSourcesJar = internalSourcesJar,
+        isSynthetic = asBoolean(value, PantsKeys.isSynthetic),
+        strictDeps = asBoolean(value, PantsKeys.strictDeps),
+        exports = asStringList(value, PantsKeys.exports).toSet,
+        scope = PantsScope.fromJson(value),
+        targetBase = value.get(PantsKeys.target_base).map(_.str)
       )
       targets.put(name, target)
     }
@@ -163,8 +156,6 @@ object PantsExport {
       )
     }
 
-    val cycles = Cycles.findConnectedComponents(targets.asScala)
-
     val scalaPlatform = PantsScalaPlatform.fromJson(output)
 
     val jvmDistribution = PantsPreferredJvmDistribution.fromJson(output.obj)
@@ -172,16 +163,22 @@ object PantsExport {
     PantsExport(
       targets = targets.asScala,
       librariesJava = libraries,
+      internalSourcesDir = internalSourcesDir,
       scalaPlatform = scalaPlatform,
-      cycles = cycles,
       jvmDistribution = jvmDistribution
     )
   }
 
+  private def asBoolean(obj: Obj, key: String): Boolean =
+    obj.value.get(key) match {
+      case Some(Bool(true)) => true
+      case _ => false
+    }
+
   private def asStringList(obj: Obj, key: String): List[String] =
     obj.value.get(key) match {
       case None => Nil
-      case Some(value) => value.arr.map(_.str).toList
+      case Some(value) => value.arr.iterator.map(_.str).toList
     }
 
 }

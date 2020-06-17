@@ -87,6 +87,7 @@ object IntelliJ {
       V.bloopVersion
     )
     newJson("sources") = project.sources.toNonDefault.toString
+    newJson("strictDeps") = project.strictDeps.toNonDefault.toString
     newJson("pantsTargets") = project.targets
     newJson("fastpassVersion") = V.fastpassVersion
     newJson("fastpassProjectName") = project.name
@@ -171,6 +172,10 @@ object IntelliJ {
       } {
         libraries(default.toString()) = Str(sources.toString())
       }
+    }
+    export.internalSources.foreach {
+      case (default, sources) =>
+        libraries(default.toString()) = Str(sources.toString())
     }
     project.root.pantsLibrariesJson.writeText(ujson.write(libraries))
   }

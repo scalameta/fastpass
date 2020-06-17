@@ -30,7 +30,9 @@ trait BloopAssertions extends munit.Assertions {
         assertClasspathDoesntContain(project.classpath, jar)
       }
 
-    def hasBinaryOnCompileClasspath(jar: String): Project =
+    def hasBinaryOnCompileClasspath(
+        jar: String
+    )(implicit loc: munit.Location): Project =
       chain {
         assertClasspathContains(project.classpath, jar)
       }
@@ -86,12 +88,16 @@ trait BloopAssertions extends munit.Assertions {
   def assertClasspathDoesntContain(classpath: List[Path], jar: String): Unit =
     assertClasspathDoesntContain(classpath, Paths.get(jar))
 
-  def assertClasspathContains(classpath: List[Path], jar: Path): Unit =
+  def assertClasspathContains(classpath: List[Path], jar: Path)(implicit
+      loc: munit.Location
+  ): Unit =
     assert(
       classpath.exists(_.endsWith(jar)),
       s"`$jar` doesn't appear on classpath: ${classpath.mkString("\n - ", "\n - ", "")}"
     )
 
-  def assertClasspathContains(classpath: List[Path], jar: String): Unit =
+  def assertClasspathContains(classpath: List[Path], jar: String)(implicit
+      loc: munit.Location
+  ): Unit =
     assertClasspathContains(classpath, Paths.get(jar))
 }

@@ -19,7 +19,10 @@ case class Export(
     isRegenerate: Boolean = false,
     token: CancelChecker = () => ()
 ) {
-  val sources = export.sources.toNonDefaultWithFallback(project.sources)
+  val sources =
+    export.sources.toNonDefaultWithFallback(project.sources)
+  val strictDeps =
+    export.strictDeps.toNonDefaultWithFallback(project.strictDeps)
   def bloopDir = out.resolve(".bloop")
   def isMergeTargetsInSameDirectory: Boolean =
     export.mergeTargetsInSameDirectory
