@@ -567,7 +567,9 @@ private class BloopPants(
     val resources: Option[List[Path]] =
       if (!target.targetType.isResourceOrTestResource) None
       else {
-        Some(List(baseDirectory))
+        target.targetBase.map { targetBase =>
+          List(workspace.resolve(targetBase))
+        }
       }
 
     val sourceRoots = target.targetBase.map { targetBase =>
