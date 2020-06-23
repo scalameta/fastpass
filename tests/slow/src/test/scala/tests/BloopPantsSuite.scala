@@ -117,4 +117,39 @@ class BloopPantsSuite extends FastpassSuite {
       .hasProjectOnRuntimeClasspath(projects2("b:b"))
   }
 
+  test("ignores jvm_app") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/app/BUILD
+                                 |scala_library(
+                                 |  name="my-library",
+                                 |  sources=['my-library/**/*.scala']
+                                 |)
+                                 |jvm_binary(
+                                 |  name="my-binary",
+                                 |  dependencies=[':my-library'],
+                                 |  main="com.company.Main"
+                                 |)
+                                 |jvm_app(
+                                 |  name="my-bundle",
+                                 |  bundles=[bundle(fileset=['config/**/*'])]
+                                 |)
+                                 |/app/my-library/com/company/Main.scala
+                                 |package com.company
+                                 |object Main { def main(args: Array[String]): Unit = () }
+                                 |/config/config.json
+                                 |{ "hello": "world" }
+                                 |""".stripMargin)
+    workspace
+      .run(
+        "create" :: "--name" :: "test" :: "::" :: Nil
+      )
+      .succeeds
+    val projects0 = workspace.projects()
+    // Ensure this doesn't include the `jvm_app` target:
+    assertEquals(
+      projects0.keys,
+      Set("-project-root", "app:my-binary", "app:my-library")
+    )
+  }
+
 }
