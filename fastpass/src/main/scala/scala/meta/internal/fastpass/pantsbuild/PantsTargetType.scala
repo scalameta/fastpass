@@ -26,8 +26,9 @@ case class PantsTargetType(value: String) {
 
 object PantsTargetType {
   private val unsupportedTargetType = Set(
-    "files", "page", "python_binary", "python_tests", "python_library",
-    "python3_binary", "python23_library", "python_requirement_library",
-    "ruby_thrift_library", "python_thrift_library", "target"
+    "files", "jvm_app", "page", "python_binary", "python_tests",
+    "python_library", "python3_binary", "python23_library",
+    "python_requirement_library", "ruby_thrift_library",
+    "python_thrift_library", "target"
   )
 }
