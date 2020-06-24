@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: olafurpg/setup-scala@v6
         with:
-          java-version: graalvm@20.1.0
+          java-version: graalvm@20.0.0
       - run: git fetch --tags || true
       - run: gu install native-image
       - run: sbt native-image

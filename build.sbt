@@ -152,7 +152,7 @@ lazy val fastpass = project
           .resolve(".jabba")
           .resolve("bin")
           .resolve("jabba")
-        val home = s"$jabba which --home graalvm@20.1.0".!!.trim()
+        val home = s"$jabba which --home graalvm@20.0.0".!!.trim()
         Paths.get(home).resolve("bin").resolve("native-image").toString
       }.getOrElse(old)
     },

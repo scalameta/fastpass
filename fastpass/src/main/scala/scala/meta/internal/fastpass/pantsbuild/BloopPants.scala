@@ -847,7 +847,9 @@ private class BloopPants(
         .map(_.toPath())
         .toList
     } catch {
-      case NonFatal(_) => Nil
+      case NonFatal(e) =>
+        scribe.warn(s"Couldn't resolve dependency `$dep`", e)
+        Nil
     }
 
 }

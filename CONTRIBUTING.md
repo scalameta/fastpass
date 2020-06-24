@@ -2,9 +2,9 @@
 
 First, install [Jabba](https://github.com/shyiko/jabba).
 
-Next, install GraalVM 20.1.0
+Next, install GraalVM 20.0.0
 ```
-jabba install graalvm@20.1.0
+jabba install graalvm@20.0.0
 ```
 
 Next, run `sbt native-image`.
