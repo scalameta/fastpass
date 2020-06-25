@@ -39,48 +39,9 @@ case class PantsGlobs(
       excludes = excludeGlobs
     )
   }
-
-  private def isRecursiveGlob(glob: String) =
-    glob.endsWith("**/*.scala") ||
-      glob.endsWith("**/*.java")
-  private def stripRecursiveGlob(glob: String) =
-    glob
-      .stripSuffix("**/*.scala")
-      .stripSuffix("**/*.java")
-
-  def isStatic: Boolean =
-    exclude.isEmpty && include.forall(glob =>
-      glob.indexOf('*') < 0 || isRecursiveGlob(glob)
-    )
-
-  def staticPaths(workspace: Path): Option[List[Path]] =
-    if (isStatic) {
-      Some(
-        include.map(relpath => workspace.resolve(stripRecursiveGlob(relpath)))
-      )
-    } else {
-      None
-    }
-
-  /** Returns a source directory if this target uses rglobs("*.scala") */
-  def sourceDirectory(workspace: Path): Option[Path] =
-    include match {
-      case head :: Nil if exclude.isEmpty =>
-        PantsGlobs.rglobsSuffixes.collectFirst {
-          case suffix if head.endsWith(suffix) =>
-            workspace.resolve(head.stripSuffix(suffix))
-        }
-      case _ =>
-        None
-    }
 }
 
 object PantsGlobs {
-  private val rglobsSuffixes = List(
-    "/**/*.java",
-    "/**/*.scala"
-  )
-
   def fromJson(target: Value): PantsGlobs = {
     target.obj.get("globs") match {
       case Some(obj: Obj) =>

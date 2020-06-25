@@ -380,20 +380,13 @@ private class BloopPants(
   }
 
   def getSources(target: PantsTarget): List[Path] = {
-    def single(t: PantsTarget): List[Path] =
-      if (t.targetType.isResourceOrTestResource) Nil
-      else if (!t.globs.isStatic) Nil
-      else if (t.isGeneratedTarget) t.roots.sourceRoots
-      else {
-        t.globs.staticPaths(workspace) match {
-          case Some(paths) => paths
-          case _ => Nil
-        }
-      }
-    val targetSources = single(target)
+    def sourcesForSingleTarget(t: PantsTarget): List[Path] =
+      if (t.isGeneratedTarget) t.roots.sourceRoots
+      else Nil
+    val targetSources = sourcesForSingleTarget(target)
     val javaSources = (for {
       javaSourcesName <- target.javaSources.iterator
-      sources <- single(export.targets(javaSourcesName))
+      sources <- sourcesForSingleTarget(export.targets(javaSourcesName))
     } yield sources).toList
     targetSources ++ javaSources
   }
@@ -402,16 +395,18 @@ private class BloopPants(
       target: PantsTarget,
       baseDirectory: Path
   ): Option[List[C.SourcesGlobs]] = {
-    def single(t: PantsTarget, baseDir: Path): List[C.SourcesGlobs] =
+    def sourceGlobsForSingleTarget(
+        t: PantsTarget,
+        baseDir: Path
+    ): List[C.SourcesGlobs] =
       if (t.targetType.isResourceOrTestResource) Nil
-      else if (t.globs.isStatic) Nil
-      else if (t.globs.isEmpty) Nil
       else List(t.globs.bloopConfig(workspace, baseDir))
-    val targetSourcesGlobs = single(target, baseDirectory)
+    val targetSourcesGlobs = sourceGlobsForSingleTarget(target, baseDirectory)
     val javaSourcesGlobs = (for {
       javaSourcesName <- target.javaSources.iterator
       javaSources = export.targets(javaSourcesName)
-      globs <- single(javaSources, javaSources.baseDirectory)
+      globs <-
+        sourceGlobsForSingleTarget(javaSources, javaSources.baseDirectory)
     } yield globs).toList
     Option(targetSourcesGlobs ++ javaSourcesGlobs).filter(_.nonEmpty)
   }
