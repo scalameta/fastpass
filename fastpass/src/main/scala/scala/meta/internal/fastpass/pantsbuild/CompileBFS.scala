@@ -1,8 +1,9 @@
 package scala.meta.internal.fastpass.pantsbuild
 
-import scala.collection.mutable
-import bloop.config.Config.CompileSetup
 import java.{util => ju}
+
+import scala.collection.mutable
+
 import scala.meta.internal.fastpass.pantsbuild.commands.StrictDepsMode
 
 /**

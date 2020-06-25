@@ -1,11 +1,16 @@
 package scala.meta.internal.fastpass.pantsbuild
 
-import scala.meta.io.AbsolutePath
-import org.eclipse.lsp4j.jsonrpc.CancelChecker
+import java.nio.file.Path
+
+import scala.meta.internal.fastpass.pantsbuild.commands.ExportOptions
 import scala.meta.internal.fastpass.pantsbuild.commands.OpenOptions
 import scala.meta.internal.fastpass.pantsbuild.commands.Project
+import scala.meta.internal.fastpass.pantsbuild.commands.SourcesMode
+import scala.meta.internal.fastpass.pantsbuild.commands.StrictDepsMode
+import scala.meta.io.AbsolutePath
+
 import metaconfig.cli.CliApp
-import scala.meta.internal.fastpass.pantsbuild.commands.ExportOptions
+import org.eclipse.lsp4j.jsonrpc.CancelChecker
 
 /**
  * The command-line argument parser for BloopPants.
@@ -19,11 +24,11 @@ case class Export(
     isRegenerate: Boolean = false,
     token: CancelChecker = () => ()
 ) {
-  val sources =
+  val sources: SourcesMode =
     export.sources.toNonDefaultWithFallback(project.sources)
-  val strictDeps =
+  val strictDeps: StrictDepsMode =
     export.strictDeps.toNonDefaultWithFallback(project.strictDeps)
-  def bloopDir = out.resolve(".bloop")
+  def bloopDir: Path = out.resolve(".bloop")
   def isMergeTargetsInSameDirectory: Boolean =
     export.mergeTargetsInSameDirectory
   def root = project.root

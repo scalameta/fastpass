@@ -1,12 +1,14 @@
 package scala.meta.internal.fastpass
 
-import java.nio.file.Path
-import java.io.OutputStream
-import scala.meta.internal.fastpass.pantsbuild.MessageOnlyException
-import scala.concurrent.ExecutionContext
-import org.eclipse.lsp4j.jsonrpc.CancelChecker
-import scala.sys.process._
 import java.io.PrintStream
+import java.nio.file.Path
+
+import scala.concurrent.ExecutionContext
+import scala.sys.process._
+
+import scala.meta.internal.fastpass.pantsbuild.MessageOnlyException
+
+import org.eclipse.lsp4j.jsonrpc.CancelChecker
 
 object SystemProcess {
   def run(

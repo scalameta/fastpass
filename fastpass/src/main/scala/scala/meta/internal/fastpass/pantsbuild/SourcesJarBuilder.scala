@@ -1,22 +1,24 @@
 package scala.meta.internal.fastpass.pantsbuild
 
+import java.io.IOException
+import java.nio.charset.StandardCharsets
 import java.nio.file.FileSystems
 import java.nio.file.FileVisitOption
 import java.nio.file.FileVisitResult
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.PathMatcher
 import java.nio.file.SimpleFileVisitor
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.Path
-import scala.collection.mutable
-import bloop.config.Config.SourcesGlobs
-import scala.meta.io.AbsolutePath
-import scala.meta.internal.fastpass.FastpassEnrichments._
-import java.nio.file.Files
-import scala.meta.io.RelativePath
-import java.nio.charset.StandardCharsets
-import scala.util.control.NonFatal
 import java.nio.file.StandardOpenOption
-import java.io.IOException
+import java.nio.file.attribute.BasicFileAttributes
+
+import scala.util.control.NonFatal
+
+import scala.meta.internal.fastpass.FastpassEnrichments._
+import scala.meta.io.AbsolutePath
+import scala.meta.io.RelativePath
+
+import bloop.config.Config.SourcesGlobs
 
 /** Helper class to generate `*-sources.jar` files. */
 class SourcesJarBuilder(export: PantsExport, root: Path) {

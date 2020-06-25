@@ -1,7 +1,5 @@
 package scala.meta.internal.fastpass
 
-import geny.Generator
-
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -10,9 +8,12 @@ import java.nio.file.StandardOpenOption
 import scala.collection.convert.DecorateAsJava
 import scala.collection.convert.DecorateAsScala
 import scala.collection.mutable
+import scala.util.control.NonFatal
+
 import scala.meta.internal.io.FileIO
 import scala.meta.io.AbsolutePath
-import scala.util.control.NonFatal
+
+import geny.Generator
 
 object FastpassEnrichments extends DecorateAsScala with DecorateAsJava {
 

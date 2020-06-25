@@ -1,33 +1,36 @@
 package scala.meta.internal.fastpass.pantsbuild.commands
 
-import scala.sys.process._
-import scala.util.Try
-import scala.concurrent.ExecutionContext
-import scala.meta.internal.fastpass.Time
-import scala.meta.internal.fastpass.Timer
-import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.util.Failure
-import scala.util.Success
-import scala.meta.internal.fastpass.pantsbuild.Export
-import scala.meta.internal.fastpass.pantsbuild.BloopPants
-import scala.meta.internal.fastpass.pantsbuild.MessageOnlyException
-import scala.meta.internal.fastpass.pantsbuild.IntelliJ
-import metaconfig.cli.CliApp
-import metaconfig.internal.Levenshtein
-import scala.meta.internal.fastpass.LogMessages
-import metaconfig.cli.TabCompletionContext
-import metaconfig.cli.TabCompletionItem
-import bloop.launcher.LauncherMain
 import java.nio.charset.StandardCharsets
-import bloop.bloopgun.core.Shell
-import scala.concurrent.Promise
-import scala.meta.internal.fastpass.BuildInfo
 import java.nio.file.Files
-import scala.meta.io.AbsolutePath
-import scala.meta.internal.fastpass.pantsbuild.PantsConfiguration
-import scala.util.control.NonFatal
 import java.nio.file.Path
 import java.nio.file.Paths
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Promise
+import scala.sys.process._
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+import scala.util.control.NonFatal
+
+import scala.meta.internal.fastpass.BuildInfo
+import scala.meta.internal.fastpass.FastpassEnrichments._
+import scala.meta.internal.fastpass.LogMessages
+import scala.meta.internal.fastpass.Time
+import scala.meta.internal.fastpass.Timer
+import scala.meta.internal.fastpass.pantsbuild.BloopPants
+import scala.meta.internal.fastpass.pantsbuild.Export
+import scala.meta.internal.fastpass.pantsbuild.IntelliJ
+import scala.meta.internal.fastpass.pantsbuild.MessageOnlyException
+import scala.meta.internal.fastpass.pantsbuild.PantsConfiguration
+import scala.meta.io.AbsolutePath
+
+import bloop.bloopgun.core.Shell
+import bloop.launcher.LauncherMain
+import metaconfig.cli.CliApp
+import metaconfig.cli.TabCompletionContext
+import metaconfig.cli.TabCompletionItem
+import metaconfig.internal.Levenshtein
 
 object SharedCommand {
   def interpretExport(export: Export): Int = {

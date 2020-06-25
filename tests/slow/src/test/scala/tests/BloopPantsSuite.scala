@@ -2,11 +2,11 @@ package tests
 
 class BloopPantsSuite extends FastpassSuite {
 
-  val pantsIni = """
-                   |/pants.ini
-                   |[GLOBAL]
-                   |pants_version: 1.26.0.dev0
-                   |""".stripMargin
+  val pantsIni: String = """
+                           |/pants.ini
+                           |[GLOBAL]
+                           |pants_version: 1.26.0.dev0
+                           |""".stripMargin
 
   test("create simple build") {
     val workspace = Workspace(s"""$pantsIni

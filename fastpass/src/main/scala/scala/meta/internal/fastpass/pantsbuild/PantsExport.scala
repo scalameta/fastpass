@@ -1,15 +1,17 @@
 package scala.meta.internal.fastpass.pantsbuild
 
-import java.nio.file.Paths
-import scala.collection.mutable
 import java.nio.file.Files
-import ujson.Obj
-import java.{util => ju}
-import scala.jdk.CollectionConverters._
 import java.nio.file.Path
-import ujson.Str
-import ujson.Bool
+import java.nio.file.Paths
+import java.{util => ju}
+
+import scala.collection.mutable
+import scala.jdk.CollectionConverters._
+
 import scala.meta.io.AbsolutePath
+
+import ujson.Bool
+import ujson.Obj
 
 case class PantsExport(
     targets: collection.Map[String, PantsTarget],

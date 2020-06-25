@@ -1,10 +1,10 @@
 package tests
 
-import bloop.config.Config.Project
-import bloop.config.Config.Platform
-
 import java.nio.file.Path
 import java.nio.file.Paths
+
+import bloop.config.Config.Platform
+import bloop.config.Config.Project
 
 trait BloopAssertions extends munit.Assertions {
   implicit class ProjectAssertions(val project: Project) {

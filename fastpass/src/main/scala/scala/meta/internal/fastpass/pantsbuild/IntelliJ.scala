@@ -1,30 +1,31 @@
 package scala.meta.internal.fastpass.pantsbuild
 
-import bloop.data.TraceSettings
+import java.net.URL
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.Files
-import scala.sys.process._
-import java.nio.charset.StandardCharsets
-import scala.meta.internal.fastpass.{BuildInfo => V}
-import java.net.URL
-import scala.meta.internal.fastpass.pantsbuild.commands.OpenOptions
-import scala.meta.internal.fastpass.pantsbuild.commands.{
-  Project,
-  RefreshCommand
-}
 import java.nio.file.StandardOpenOption
+
+import scala.sys.process._
+
+import scala.meta.fastpass.Fastpass
+import scala.meta.internal.fastpass.FastpassEnrichments._
+import scala.meta.internal.fastpass.pantsbuild.commands.OpenOptions
+import scala.meta.internal.fastpass.pantsbuild.commands.Project
+import scala.meta.internal.fastpass.pantsbuild.commands.RefreshCommand
+import scala.meta.internal.fastpass.pantsbuild.commands.SharedCommand
+import scala.meta.internal.fastpass.pantsbuild.commands.SharedOptions
+import scala.meta.internal.fastpass.zipkin.Property
+import scala.meta.internal.fastpass.zipkin.ZipkinProperties
+import scala.meta.internal.fastpass.{BuildInfo => V}
+
+import bloop.data.TraceSettings
 import bloop.data.WorkspaceSettings
 import bloop.io.AbsolutePath
 import bloop.logging.NoopLogger
-import scala.meta.internal.fastpass.zipkin.Property
-import scala.meta.internal.fastpass.zipkin.ZipkinProperties
 import ujson.Obj
 import ujson.Str
-import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.meta.fastpass.Fastpass
-import scala.meta.internal.fastpass.pantsbuild.commands.SharedCommand
-import scala.meta.internal.fastpass.pantsbuild.commands.SharedOptions
 
 object IntelliJ {
   def launch(project: Project, open: OpenOptions): Unit = {

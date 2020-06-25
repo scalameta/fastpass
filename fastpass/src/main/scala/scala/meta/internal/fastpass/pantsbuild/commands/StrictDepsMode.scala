@@ -1,10 +1,12 @@
 package scala.meta.internal.fastpass.pantsbuild.commands
 
+import scala.util.matching.Regex
+
 import metaconfig.Conf
 import metaconfig.Configured
 
 sealed abstract class StrictDepsMode(val name: String) {
-  def isStrict = this == StrictDepsMode.Strict
+  def isStrict: Boolean = this == StrictDepsMode.Strict
   def plusDepth: Int =
     this match {
       case StrictDepsMode.Strict => 0
@@ -12,8 +14,8 @@ sealed abstract class StrictDepsMode(val name: String) {
       case StrictDepsMode.Transitive => Int.MaxValue
       case other => throw new IllegalArgumentException(s"$this has no depth")
     }
-  def isTransitive = this == StrictDepsMode.Transitive
-  def isDefault = this == StrictDepsMode.Default
+  def isTransitive: Boolean = this == StrictDepsMode.Transitive
+  def isDefault: Boolean = this == StrictDepsMode.Default
   def toNonDefaultWithFallback(fallback: StrictDepsMode): StrictDepsMode =
     if (isDefault) fallback.toNonDefault
     else this
@@ -26,12 +28,12 @@ sealed abstract class StrictDepsMode(val name: String) {
 object StrictDepsMode {
   case object Strict extends StrictDepsMode("strict")
   case class Plus(n: Int) extends StrictDepsMode(s"plus-$n")
-  val PlusOne = Plus(1)
+  val PlusOne: Plus = Plus(1)
   case object Default extends StrictDepsMode("default")
   case object Transitive extends StrictDepsMode("transitive")
   implicit lazy val encoder: metaconfig.ConfEncoder[StrictDepsMode] =
     metaconfig.ConfEncoder.StringEncoder.contramap[StrictDepsMode](_.toString)
-  val PlusRegex = "plus-(\\d+)".r
+  val PlusRegex: Regex = "plus-(\\d+)".r
   implicit lazy val decoder: metaconfig.ConfDecoder[StrictDepsMode] =
     metaconfig.ConfDecoder.instanceExpect(s"$Strict|${Plus(1)}|$Transitive") {
       case Conf.Str(Strict.name) =>
