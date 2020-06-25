@@ -1,9 +1,10 @@
 package scala.meta.internal.fastpass.pantsbuild.commands
 
-import metaconfig.generic
+import metaconfig.ConfDecoder
+import metaconfig.ConfEncoder
 import metaconfig.annotation._
+import metaconfig.generic
 import metaconfig.generic.Settings
-import metaconfig.{ConfDecoder, ConfEncoder}
 
 case class SwitchOptions(
     @ExtraName("remainingArgs")

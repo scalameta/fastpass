@@ -1,7 +1,6 @@
 package scala.meta.internal.fastpass.pantsbuild
 
 import java.nio.file.Path
-import scala.meta.io.AbsolutePath
 
 // NOTE(olafur): intentionally not a case class to use reference equality.
 class PantsTarget(

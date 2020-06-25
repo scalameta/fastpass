@@ -1,7 +1,7 @@
 package scala.meta.internal.fastpass.pantsbuild.commands
 
-import metaconfig.Configured
 import metaconfig.Conf
+import metaconfig.Configured
 
 sealed abstract class SourcesMode(override val toString: String) {
   def isOff: Boolean = this == SourcesMode.Off

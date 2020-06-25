@@ -1,9 +1,5 @@
 package tests
 
-import bloop.config.Config
-
-import tests.build.BuildInfo
-
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.PrintStream
@@ -15,9 +11,13 @@ import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
+
 import scala.meta.internal.fastpass.SystemProcess
 import scala.meta.internal.fastpass.pantsbuild.BloopPants
 import scala.meta.io.AbsolutePath
+
+import bloop.config.Config
+import tests.build.BuildInfo
 
 trait FastpassSuite extends munit.FunSuite with BloopAssertions {
 

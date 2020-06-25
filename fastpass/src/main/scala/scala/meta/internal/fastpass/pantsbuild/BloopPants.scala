@@ -1,54 +1,48 @@
 package scala.meta.internal.fastpass.pantsbuild
 
-import bloop.config.{Config => C}
-import bloop.config.Tag
-import coursierapi.Dependency
-import coursierapi.MavenRepository
 import java.io.IOException
 import java.nio.charset.StandardCharsets
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
+import java.{util => ju}
+
+import scala.annotation.switch
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
-import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.meta.internal.fastpass.BuildInfo
-import scala.meta.internal.fastpass.pantsbuild.commands._
-import scala.meta.internal.fastpass.InterruptException
-import scala.meta.internal.fastpass.SystemProcess
-import scala.meta.io.AbsolutePath
-import org.eclipse.lsp4j.jsonrpc.CancelChecker
-
 import scala.sys.process.Process
-import scala.util.control.NonFatal
 import scala.util.Failure
 import scala.util.Properties
 import scala.util.Success
 import scala.util.Try
-import ujson.Value
-import metaconfig.cli.CliApp
-import metaconfig.cli.TabCompleteCommand
-import metaconfig.cli.HelpCommand
-import metaconfig.cli.VersionCommand
-import java.{util => ju}
-import java.nio.file.FileSystems
-import scala.annotation.tailrec
-import scala.meta.internal.fastpass.MD5
+import scala.util.control.NonFatal
+
+import scala.meta.internal.fastpass.BuildInfo
+import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.FastpassLogger
-import scala.annotation.switch
-import scala.meta.io.Classpath
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.LinkOption
-import bloop.config.Config.SourcesGlobs
-import java.nio.file.SimpleFileVisitor
-import java.nio.file.FileVisitOption
-import java.nio.file.FileVisitResult
-import java.nio.file.PathMatcher
+import scala.meta.internal.fastpass.InterruptException
+import scala.meta.internal.fastpass.MD5
+import scala.meta.internal.fastpass.SystemProcess
+import scala.meta.internal.fastpass.pantsbuild.commands._
 import scala.meta.internal.io.FileIO
-import java.util.concurrent.ConcurrentHashMap
-import scala.meta.internal.io.PathIO
+import scala.meta.io.AbsolutePath
+import scala.meta.io.Classpath
+
+import bloop.config.Tag
+import bloop.config.{Config => C}
+import coursierapi.Dependency
+import coursierapi.MavenRepository
+import metaconfig.cli.CliApp
+import metaconfig.cli.HelpCommand
+import metaconfig.cli.TabCompleteCommand
+import metaconfig.cli.VersionCommand
+import org.eclipse.lsp4j.jsonrpc.CancelChecker
+import ujson.Value
 
 object BloopPants {
   lazy val app: CliApp = CliApp(
@@ -262,8 +256,8 @@ private class BloopPants(
     bloopDir: Path,
     export: PantsExport
 )(implicit ec: ExecutionContext) { self =>
-  val size = export.targets.valuesIterator.count(_.isModulizable)
-  val isLarge = size > 250
+  val size: Int = export.targets.valuesIterator.count(_.isModulizable)
+  val isLarge: Boolean = size > 250
   def token: CancelChecker = args.token
   def workspace: Path = args.workspace
   def userTargets: List[String] = args.targets
@@ -366,8 +360,8 @@ private class BloopPants(
   }
 
   val intervals = 20
-  val points = 100 / intervals
-  val isProgressPoint = 0
+  val points: Int = 100 / intervals
+  val isProgressPoint: Map[Int, Int] = 0
     .until(size)
     .by(math.max(1, size / (intervals - 1)))
     .zipWithIndex

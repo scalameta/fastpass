@@ -1,12 +1,14 @@
 package scala.meta.internal.fastpass.pantsbuild.commands
 
+import scala.util.Try
+
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.pantsbuild.PantsConfiguration
 import scala.meta.io.AbsolutePath
-import scala.util.Try
-import ujson.Str
+
 import metaconfig.Conf
 import ujson.Bool
+import ujson.Str
 
 case class Project(
     common: SharedOptions,

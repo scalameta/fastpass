@@ -88,7 +88,11 @@ inThisBuild(
       // -Xlint is unusable because of
       // https://github.com/scala/bug/issues/10448
       "-Ywarn-unused:imports"
-    )
+    ),
+    semanticdbEnabled := true,
+    semanticdbVersion := scalafixSemanticdb.revision,
+    scalafixCaching := true,
+    scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.3.1-RC3"
   )
 )
 
@@ -99,6 +103,13 @@ addCommandAlias(
   "native-image",
   "; fastpass/graalvm-native-image:packageBin ; taskready"
 )
+
+addCommandAlias(
+  "fix",
+  "; all scalafix test:scalafix ; all scalafmt test:scalafmt scalafmtSbt"
+)
+
+addCommandAlias("fixCheck", "; scalafix --check ; test:scalafix --check")
 
 commands += Command.command("taskready") { s =>
   import scala.sys.process._
