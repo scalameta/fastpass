@@ -454,7 +454,7 @@ private class BloopPants(
     val result = new ConcurrentHashMap[Path, Path]
     resolutionTargets.stream().parallel().forEach { target =>
       target.targetBase.foreach { targetBase =>
-        val sourceRoot = workspace.resolve(targetBase)
+        val sourceRoot = AbsolutePath(workspace).resolve(targetBase)
         val sources = target.internalSourcesJar
         Files.deleteIfExists(sources)
         FileIO.withJarFileSystem(
@@ -463,11 +463,10 @@ private class BloopPants(
           close = true
         ) { root =>
           val jars = new SourcesJarBuilder(export, root.toNIO)
-          val base = workspace.resolve(targetBase)
           getSources(target)
             .foreach(dir => jars.expandDirectory(AbsolutePath(dir), sourceRoot))
           getSourcesGlobs(target, target.baseDirectory).iterator.flatten
-            .foreach(glob => jars.expandGlob(glob, base))
+            .foreach(glob => jars.expandGlob(glob, sourceRoot))
         }
         toImmutableJars(target).headOption.foreach { default =>
           result.put(default, sources)

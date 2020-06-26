@@ -1,5 +1,8 @@
 package tests
 
+import scala.meta.internal.io.FileIO
+import scala.meta.io.AbsolutePath
+
 class BloopPantsSuite extends FastpassSuite {
 
   val pantsIni: String = """
@@ -217,6 +220,50 @@ class BloopPantsSuite extends FastpassSuite {
       .hasProjectOnCompileClasspath(projects1("libs:my-library"))
       .hasProjectOnRuntimeClasspath(projects1("libs:my-library"))
 
+  }
+
+  test("relative sources.jar") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/lib/src/main/scala/lib/BUILD
+                                 |scala_library()
+                                 |/lib/src/main/scala/lib/Hello1.scala
+                                 |package lib
+                                 |class Hello1
+                                 |/lib/src/main/scala/lib/Hello2.scala
+                                 |package lib
+                                 |class Hello2
+                                 |/app/src/main/scala/app/BUILD
+                                 |scala_library(
+                                 |  dependencies = ["lib/src/main/scala/lib:lib"]
+                                 |)
+                                 |""".stripMargin)
+    workspace.run("create" :: "--name" :: "test" :: "app::" :: Nil).succeeds
+    val projects = workspace.projects()
+    val app = projects("app/src/main/scala/app:app")
+    val List(libSources) = for {
+      resolution <- app.resolution.toList
+      module <- resolution.modules
+      artifact <- module.artifacts
+      if artifact.path.endsWith("lib.src.main.scala.lib.lib-sources.jar")
+    } yield artifact.path
+    val relativePaths =
+      FileIO.withJarFileSystem(
+        AbsolutePath(libSources),
+        create = false,
+        close = true
+      ) { root =>
+        FileIO
+          .listAllFilesRecursively(root)
+          .files
+          .map(_.toURI(false).toString())
+      }
+    assertNoDiff(
+      relativePaths.sorted.mkString("\n"),
+      """
+        |lib/Hello1.scala
+        |lib/Hello2.scala
+        |""".stripMargin
+    )
   }
 
 }
