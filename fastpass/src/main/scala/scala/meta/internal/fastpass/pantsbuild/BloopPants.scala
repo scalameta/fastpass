@@ -327,7 +327,7 @@ private class BloopPants(
       args.targets
     )
     val isBaseDirectory =
-      projects.iterator.filter(_.sources.nonEmpty).map(_.directory).toSet
+      projects.iterator.filter(_.sourcesGlobs.nonEmpty).map(_.directory).toSet
     // NOTE(olafur): generate synthetic projects to improve the file tree view
     // in IntelliJ. Details: https://github.com/olafurpg/intellij-bsp-pants/issues/7
     val syntheticProjects: List[C.Project] = sourceRoots.flatMap { root =>

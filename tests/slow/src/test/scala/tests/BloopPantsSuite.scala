@@ -77,7 +77,7 @@ class BloopPantsSuite extends FastpassSuite {
       )
       .succeeds
     val projects0 = workspace.projects()
-    assertEquals(projects0.keys, Set("c:c", "c-project-root"))
+    assertEquals(projects0.keys, Set("c:c"))
     projects0("c:c")
       .doesntHaveBinaryOnCompileClasspath("a.a.jar")
       .hasBinaryOnCompileClasspath("b.b.jar")
@@ -90,7 +90,7 @@ class BloopPantsSuite extends FastpassSuite {
     val projects1 = workspace.projects()
     assertEquals(
       projects1.keys,
-      Set("b:b", "b-project-root", "c:c", "c-project-root")
+      Set("b:b", "c:c")
     )
     projects1("b:b")
       .hasBinaryOnCompileClasspath("a.a.jar")
@@ -107,8 +107,7 @@ class BloopPantsSuite extends FastpassSuite {
     val projects2 = workspace.projects()
     assertEquals(
       projects2.keys,
-      Set("a:a", "a-project-root", "b:b", "b-project-root", "c:c",
-        "c-project-root")
+      Set("a:a", "b:b", "c:c")
     )
     projects2("b:b")
       .hasProjectOnCompileClasspath(projects2("a:a"))
@@ -195,7 +194,7 @@ class BloopPantsSuite extends FastpassSuite {
       )
       .succeeds
     val projects0 = workspace.projects()
-    assertEquals(projects0.keys, Set("app-project-root", "app:my-binary"))
+    assertEquals(projects0.keys, Set("app:my-binary"))
     projects0("app:my-binary")
       .hasBinaryOnCompileClasspath("libs.my-library.jar")
       .hasBinaryOnRuntimeClasspath("libs.my-library.jar")
@@ -209,9 +208,7 @@ class BloopPantsSuite extends FastpassSuite {
     assertEquals(
       projects1.keys,
       Set(
-        "app-project-root",
         "app:my-binary",
-        "libs-project-root",
         "libs:my-library",
         "libs:scalacheck"
       )
