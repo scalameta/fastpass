@@ -50,12 +50,14 @@ class CompileBFS(export: PantsExport, mode: StrictDepsMode) {
         isInProgress.add(name)
         val result = new mutable.LinkedHashSet[PantsTarget]()
         val exportNames: Seq[String] =
-          if (dep.pantsTargetType.isTarget) {
-            // NOTE(olafur): it seems like `target` types export their
-            // dependencies even if they have an empty `exports` field. This
-            // should probably be reflected in the output of `export-fastpass`
-            // but for now it's OK to do this logic on the fastpass-side
-            // instead.
+          if (
+            dep.pantsTargetType.isTarget || dep.pantsTargetType.isJarLibrary
+          ) {
+            // NOTE(olafur): it seems like `target` and `jar_library` types
+            // export their dependencies even if they have an empty `exports`
+            // field. This should probably be reflected in the output of
+            // `export-fastpass` but for now it's OK to do this logic on the
+            // fastpass-side instead.
             dep.dependencies
           } else {
             for {
