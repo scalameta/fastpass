@@ -152,4 +152,71 @@ class BloopPantsSuite extends FastpassSuite {
     )
   }
 
+  test("exports jar_library deps") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/libs/BUILD
+                                 |scala_library(
+                                 |  name = "my-library",
+                                 |  sources = ["library/**/*.scala"]
+                                 |)
+                                 |jar_library(
+                                 |    name = "scalacheck",
+                                 |    jars = [scala_jar(
+                                 |        org = "org.scalacheck",
+                                 |        name = "scalacheck",
+                                 |        rev = "1.14.0",
+                                 |    )],
+                                 |    dependencies = [":my-library"]
+                                 |)
+                                 |/libs/library/Lib.scala
+                                 |package library
+                                 |object Library { val a = 0 }
+                                 |/app/BUILD
+                                 |target(
+                                 |  name = "proxy",
+                                 |  dependencies = ["libs:scalacheck"]
+                                 |)
+                                 |scala_library(
+                                 |  name = "my-binary",
+                                 |  sources = ["**/*.scala"],
+                                 |  dependencies = [":proxy"],
+                                 |  strict_deps = True
+                                 |)
+                                 |/app/App.scala
+                                 |package com.company
+                                 |object Main { def main(args: Array[String]): Unit = println("a": library.Library.a) }
+                                 |""".stripMargin)
+    workspace
+      .run(
+        "create" :: "--name" :: "test" :: "app:my-binary" :: "--strict-deps=strict" :: Nil
+      )
+      .succeeds
+    val projects0 = workspace.projects()
+    assertEquals(projects0.keys, Set("app-project-root", "app:my-binary"))
+    projects0("app:my-binary")
+      .hasBinaryOnCompileClasspath("libs.my-library.jar")
+      .hasBinaryOnRuntimeClasspath("libs.my-library.jar")
+
+    workspace
+      .run(
+        "amend" :: "test" :: "--new-targets" :: "libs:my-library,app:my-binary" :: "--strict-deps=strict" :: Nil
+      )
+      .succeeds
+    val projects1 = workspace.projects()
+    assertEquals(
+      projects1.keys,
+      Set(
+        "app-project-root",
+        "app:my-binary",
+        "libs-project-root",
+        "libs:my-library",
+        "libs:scalacheck"
+      )
+    )
+    projects1("app:my-binary")
+      .hasProjectOnCompileClasspath(projects1("libs:my-library"))
+      .hasProjectOnRuntimeClasspath(projects1("libs:my-library"))
+
+  }
+
 }
