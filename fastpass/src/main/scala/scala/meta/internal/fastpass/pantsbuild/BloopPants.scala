@@ -327,7 +327,7 @@ private class BloopPants(
       args.targets
     )
     val isBaseDirectory =
-      projects.iterator.filter(_.sources.nonEmpty).map(_.directory).toSet
+      projects.iterator.filter(_.sourcesGlobs.nonEmpty).map(_.directory).toSet
     // NOTE(olafur): generate synthetic projects to improve the file tree view
     // in IntelliJ. Details: https://github.com/olafurpg/intellij-bsp-pants/issues/7
     val syntheticProjects: List[C.Project] = sourceRoots.flatMap { root =>
@@ -454,7 +454,7 @@ private class BloopPants(
     val result = new ConcurrentHashMap[Path, Path]
     resolutionTargets.stream().parallel().forEach { target =>
       target.targetBase.foreach { targetBase =>
-        val sourceRoot = workspace.resolve(targetBase)
+        val sourceRoot = AbsolutePath(workspace).resolve(targetBase)
         val sources = target.internalSourcesJar
         Files.deleteIfExists(sources)
         FileIO.withJarFileSystem(
@@ -463,11 +463,10 @@ private class BloopPants(
           close = true
         ) { root =>
           val jars = new SourcesJarBuilder(export, root.toNIO)
-          val base = workspace.resolve(targetBase)
           getSources(target)
             .foreach(dir => jars.expandDirectory(AbsolutePath(dir), sourceRoot))
           getSourcesGlobs(target, target.baseDirectory).iterator.flatten
-            .foreach(glob => jars.expandGlob(glob, base))
+            .foreach(glob => jars.expandGlob(glob, sourceRoot))
         }
         toImmutableJars(target).headOption.foreach { default =>
           result.put(default, sources)

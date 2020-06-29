@@ -1,5 +1,8 @@
 package tests
 
+import scala.meta.internal.io.FileIO
+import scala.meta.io.AbsolutePath
+
 class BloopPantsSuite extends FastpassSuite {
 
   val pantsIni: String = """
@@ -74,7 +77,7 @@ class BloopPantsSuite extends FastpassSuite {
       )
       .succeeds
     val projects0 = workspace.projects()
-    assertEquals(projects0.keys, Set("c:c", "c-project-root"))
+    assertEquals(projects0.keys, Set("c:c"))
     projects0("c:c")
       .doesntHaveBinaryOnCompileClasspath("a.a.jar")
       .hasBinaryOnCompileClasspath("b.b.jar")
@@ -87,7 +90,7 @@ class BloopPantsSuite extends FastpassSuite {
     val projects1 = workspace.projects()
     assertEquals(
       projects1.keys,
-      Set("b:b", "b-project-root", "c:c", "c-project-root")
+      Set("b:b", "c:c")
     )
     projects1("b:b")
       .hasBinaryOnCompileClasspath("a.a.jar")
@@ -104,8 +107,7 @@ class BloopPantsSuite extends FastpassSuite {
     val projects2 = workspace.projects()
     assertEquals(
       projects2.keys,
-      Set("a:a", "a-project-root", "b:b", "b-project-root", "c:c",
-        "c-project-root")
+      Set("a:a", "b:b", "c:c")
     )
     projects2("b:b")
       .hasProjectOnCompileClasspath(projects2("a:a"))
@@ -192,7 +194,7 @@ class BloopPantsSuite extends FastpassSuite {
       )
       .succeeds
     val projects0 = workspace.projects()
-    assertEquals(projects0.keys, Set("app-project-root", "app:my-binary"))
+    assertEquals(projects0.keys, Set("app:my-binary"))
     projects0("app:my-binary")
       .hasBinaryOnCompileClasspath("libs.my-library.jar")
       .hasBinaryOnRuntimeClasspath("libs.my-library.jar")
@@ -206,9 +208,7 @@ class BloopPantsSuite extends FastpassSuite {
     assertEquals(
       projects1.keys,
       Set(
-        "app-project-root",
         "app:my-binary",
-        "libs-project-root",
         "libs:my-library",
         "libs:scalacheck"
       )
@@ -217,6 +217,50 @@ class BloopPantsSuite extends FastpassSuite {
       .hasProjectOnCompileClasspath(projects1("libs:my-library"))
       .hasProjectOnRuntimeClasspath(projects1("libs:my-library"))
 
+  }
+
+  test("relative sources.jar") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/lib/src/main/scala/lib/BUILD
+                                 |scala_library()
+                                 |/lib/src/main/scala/lib/Hello1.scala
+                                 |package lib
+                                 |class Hello1
+                                 |/lib/src/main/scala/lib/Hello2.scala
+                                 |package lib
+                                 |class Hello2
+                                 |/app/src/main/scala/app/BUILD
+                                 |scala_library(
+                                 |  dependencies = ["lib/src/main/scala/lib:lib"]
+                                 |)
+                                 |""".stripMargin)
+    workspace.run("create" :: "--name" :: "test" :: "app::" :: Nil).succeeds
+    val projects = workspace.projects()
+    val app = projects("app/src/main/scala/app:app")
+    val List(libSources) = for {
+      resolution <- app.resolution.toList
+      module <- resolution.modules
+      artifact <- module.artifacts
+      if artifact.path.endsWith("lib.src.main.scala.lib.lib-sources.jar")
+    } yield artifact.path
+    val relativePaths =
+      FileIO.withJarFileSystem(
+        AbsolutePath(libSources),
+        create = false,
+        close = true
+      ) { root =>
+        FileIO
+          .listAllFilesRecursively(root)
+          .files
+          .map(_.toURI(false).toString())
+      }
+    assertNoDiff(
+      relativePaths.sorted.mkString("\n"),
+      """
+        |lib/Hello1.scala
+        |lib/Hello2.scala
+        |""".stripMargin
+    )
   }
 
 }

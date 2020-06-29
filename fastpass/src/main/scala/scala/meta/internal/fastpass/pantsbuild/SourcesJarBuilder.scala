@@ -43,9 +43,8 @@ class SourcesJarBuilder(export: PantsExport, root: Path) {
 
   def expandDirectory(
       dir: AbsolutePath,
-      relativizeBy: Path
+      relativizeBy: AbsolutePath
   ): Unit = {
-    val root = AbsolutePath(relativizeBy)
     Files.walkFileTree(
       dir.toNIO,
       java.util.EnumSet.of(FileVisitOption.FOLLOW_LINKS),
@@ -63,7 +62,7 @@ class SourcesJarBuilder(export: PantsExport, root: Path) {
         ): FileVisitResult = {
           write(
             AbsolutePath(file),
-            AbsolutePath(file).toRelative(root)
+            AbsolutePath(file).toRelative(relativizeBy)
           )
           FileVisitResult.CONTINUE
         }
@@ -71,7 +70,7 @@ class SourcesJarBuilder(export: PantsExport, root: Path) {
     )
   }
 
-  def expandGlob(glob: SourcesGlobs, baseDir: Path): Unit = {
+  def expandGlob(glob: SourcesGlobs, relativizeBy: AbsolutePath): Unit = {
     val fs = FileSystems.getDefault()
     val includes = glob.includes.map(fs.getPathMatcher)
     val excludes = glob.excludes.map(fs.getPathMatcher)
@@ -106,7 +105,7 @@ class SourcesJarBuilder(export: PantsExport, root: Path) {
           if (matches(file)) {
             write(
               AbsolutePath(file),
-              AbsolutePath(file).toRelative(AbsolutePath(glob.directory))
+              AbsolutePath(file).toRelative(relativizeBy)
             )
           }
           FileVisitResult.CONTINUE
