@@ -28,7 +28,8 @@ class PantsTarget(
     val isSynthetic: Boolean,
     val exports: Set[String],
     val scope: PantsScope,
-    val targetBase: Option[String]
+    val targetBase: Option[String],
+    val mainClass: Option[String]
 ) {
   require(
     !classesDir.getFileName().toString().endsWith(".json"),

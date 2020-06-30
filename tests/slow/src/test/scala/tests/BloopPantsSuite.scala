@@ -3,6 +3,8 @@ package tests
 import scala.meta.internal.io.FileIO
 import scala.meta.io.AbsolutePath
 
+import bloop.config.Config
+
 class BloopPantsSuite extends FastpassSuite {
 
   val pantsIni: String = """
@@ -261,6 +263,33 @@ class BloopPantsSuite extends FastpassSuite {
         |lib/Hello2.scala
         |""".stripMargin
     )
+  }
+
+  test("specify main_class") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/app/BUILD
+                                 |scala_library(
+                                 |  name="my-library",
+                                 |  sources=['my-library/**/*.scala']
+                                 |)
+                                 |jvm_binary(
+                                 |  name="my-binary",
+                                 |  dependencies=[':my-library'],
+                                 |  main="com.company.Main"
+                                 |)
+                                 |/app/my-library/com/company/Main.scala
+                                 |package com.company
+                                 |object Main { def main(args: Array[String]): Unit = () }
+                                 |""".stripMargin)
+    workspace.run("create" :: "--name" :: "test" :: "app::" :: Nil).succeeds
+    val projects = workspace.projects()
+    val binary = projects("app:my-binary")
+    binary.platform match {
+      case Some(jvm: Config.Platform.Jvm) =>
+        assertEquals(jvm.mainClass, Some("com.company.Main"))
+      case _ =>
+        fail("No main class specified.")
+    }
   }
 
 }

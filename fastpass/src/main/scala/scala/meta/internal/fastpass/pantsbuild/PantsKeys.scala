@@ -33,4 +33,5 @@ object PantsKeys {
   val exports = "exports"
   val scope = "scope"
   val target_base = "target_base"
+  val main_class = "main_class"
 }
