@@ -115,9 +115,12 @@ object IntelliJ {
       RefreshCommand.name,
       "--workspace",
       project.common.workspace.toString,
-      "--no-bloop-exit",
+      "--no-bloop-exit"
+    ) ++
+      shared.pants
+        .map(path => List("--pants", path.toString))
+        .getOrElse(List.empty) :+
       project.name
-    )
 
     val workspace = scala.meta.io.AbsolutePath(project.common.workspace)
     val props = Property.fromFile(workspace)
