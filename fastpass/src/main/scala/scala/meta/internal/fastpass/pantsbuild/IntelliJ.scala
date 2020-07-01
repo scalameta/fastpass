@@ -87,6 +87,13 @@ object IntelliJ {
       "--",
       V.bloopVersion
     )
+    newJson("argvExit") = List[String](
+      coursier.toString,
+      "launch",
+      s"bloop:${V.bloopVersion}",
+      "--",
+      "exit"
+    )
     newJson("sources") = project.sources.toNonDefault.toString
     newJson("strictDeps") = project.strictDeps.toNonDefault.toString
     newJson("pantsTargets") = project.targets
