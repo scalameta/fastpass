@@ -129,7 +129,8 @@ object PantsExport {
         strictDeps = asBoolean(value, PantsKeys.strictDeps),
         exports = asStringList(value, PantsKeys.exports).toSet,
         scope = PantsScope.fromJson(value),
-        targetBase = value.get(PantsKeys.target_base).map(_.str)
+        targetBase = value.get(PantsKeys.target_base).map(_.str),
+        mainClass = value.get(PantsKeys.main_class).map(_.str)
       )
       targets.put(name, target)
     }

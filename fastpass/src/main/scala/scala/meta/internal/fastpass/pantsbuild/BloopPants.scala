@@ -597,7 +597,7 @@ private class BloopPants(
               s"-Duser.dir=$workspace"
             ) ++ extraJvmOptions
           ),
-          None,
+          target.mainClass,
           Some(runtimeClasspath),
           None
         )
