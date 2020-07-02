@@ -20,13 +20,21 @@ case class PantsGlobs(
       .toRelative(AbsolutePath(workspace))
       .toURI(true)
       .toString()
+    def toNioPathMatcher(pattern: String): String = {
+      // NOTE(olafur) Pants globs interpret "**/*.scala" as "zero or more
+      // directories" while Bloop uses `java.nio.file.PathMatcher`, which
+      // interprets it as "one or more directories".
+      pattern.replace("**/*", "**")
+    }
     def relativizeGlob(glob: String): String = {
-      val pattern = glob
-        .stripPrefix(prefix)
-        // NOTE(olafur) Pants globs interpret "**/*.scala" as "zero or more
-        // directories" while Bloop uses `java.nio.file.PathMatcher`, which
-        // interprets it as "one or more directories".
-        .replace("**/*", "**")
+      val pattern = glob.stripPrefix(prefix) match {
+        case pat if pat.endsWith("/*") && !pat.endsWith("**/*") =>
+          // NOTE(martin) Pants globs ending in `/*` will match everything in that
+          // directory. The equivalent `java.nio.file.PathMatcher` is `/**`.
+          toNioPathMatcher(pat.substring(0, pat.length - 2)) + "/**"
+        case pat =>
+          toNioPathMatcher(pat)
+      }
       s"glob:$pattern"
     }
     val includeGlobs = include.map(relativizeGlob)

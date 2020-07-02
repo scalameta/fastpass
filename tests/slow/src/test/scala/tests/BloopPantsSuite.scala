@@ -292,4 +292,34 @@ class BloopPantsSuite extends FastpassSuite {
     }
   }
 
+  test("globs are translated") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/app/BUILD
+                                 |scala_library(
+                                 |  name="my-library",
+                                 |  sources=[
+                                 |    'foo/**/*.scala',
+                                 |    'bar/*',
+                                 |    'baz/**/*/foo/*',
+                                 |    '!fizz/**/*.scala',
+                                 |    '!buzz/*',
+                                 |    '!fizz/**/*/buzz/*',
+                                 |  ]
+                                 |)""".stripMargin)
+    workspace
+      .run("create" :: "--name" :: "test" :: "app:my-library" :: Nil)
+      .succeeds
+    val projects = workspace.projects()
+    val library = projects("app:my-library")
+    val expectedIncludes =
+      "glob:foo/**.scala" :: "glob:bar/**" :: "glob:baz/**/foo/**" :: Nil
+    val expectedExcludes =
+      "glob:fizz/**.scala" :: "glob:buzz/**" :: "glob:fizz/**/buzz/**" :: Nil
+    val actualIncludes = library.sourcesGlobs.getOrElse(Nil).flatMap(_.includes)
+    val actualExcludes = library.sourcesGlobs.getOrElse(Nil).flatMap(_.excludes)
+
+    assertEquals(actualIncludes, expectedIncludes)
+    assertEquals(actualExcludes, expectedExcludes)
+  }
+
 }
