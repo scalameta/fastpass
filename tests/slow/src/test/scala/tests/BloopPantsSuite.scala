@@ -11,6 +11,8 @@ class BloopPantsSuite extends FastpassSuite {
                            |/pants.ini
                            |[GLOBAL]
                            |pants_version: 1.26.0.dev0
+                           |[resolver]
+                           |resolver: coursier
                            |""".stripMargin
 
   test("create simple build") {
@@ -320,6 +322,32 @@ class BloopPantsSuite extends FastpassSuite {
 
     assertEquals(actualIncludes, expectedIncludes)
     assertEquals(actualExcludes, expectedExcludes)
+  }
+
+  test("respect excludes in runtime classpath") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/lib/BUILD
+                                 |jar_library(
+                                 |    name = "scalacheck",
+                                 |    jars = [scala_jar(
+                                 |        org = "org.scalacheck",
+                                 |        name = "scalacheck",
+                                 |        rev = "1.14.0",
+                                 |    )]
+                                 |)
+                                 |scala_library(
+                                 |  name="lib0",
+                                 |  sources=['lib0/**/*.scala'],
+                                 |  dependencies=[':scalacheck'],
+                                 |  excludes=[exclude(org='org.scala-sbt', name='test-interface')]
+                                 |)
+                                 |""".stripMargin)
+    workspace.run("create" :: "--name" :: "test" :: "lib::" :: Nil).succeeds
+    val projects = workspace.projects()
+
+    projects("lib:lib0")
+      .hasBinaryOnCompileClasspath("test-interface-1.0.jar")
+      .doesntHaveBinaryOnRuntimeClasspath("test-interface-1.0.jar")
   }
 
 }

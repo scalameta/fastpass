@@ -165,6 +165,7 @@ object BloopPants {
       s"--${noInternalSources}export-fastpass-sources",
       s"--${no3rdPartySources}export-fastpass-libraries-sources",
       s"--export-fastpass-output-file=$outputFile",
+      s"--export-fastpass-allow-global-excludes=False",
       s"export-fastpass"
     ) ++ args.targets
     val shortName = "pants export-fastpass"
@@ -538,8 +539,12 @@ private class BloopPants(
         .map(_.dependencyName)
         .toList
 
-    val runtimeLibraries = classpathLibraries(target, runtimeDependencies)
-    val compileLibraries = classpathLibraries(target, compileDependencies)
+    // With pants, the libraries that appear in `excludes` are still included on the compilation
+    // classpath, but they are removed from the runtime classpath.
+    val runtimeLibraries =
+      classpathLibraries(target, runtimeDependencies, ignoreExcludes = false)
+    val compileLibraries =
+      classpathLibraries(target, compileDependencies, ignoreExcludes = true)
 
     val runtimeClasspath =
       computeClasspath(target, runtimeDependencies, runtimeLibraries)
@@ -609,12 +614,14 @@ private class BloopPants(
 
   def classpathLibraries(
       target: PantsTarget,
-      dependencies: Iterable[PantsTarget]
+      dependencies: Iterable[PantsTarget],
+      ignoreExcludes: Boolean
   ): Iterable[PantsLibrary] = {
     val out = new mutable.ArrayBuffer[PantsLibrary]()
     val isVisited = new IdentityHashSet[String]
     val excludes =
-      target.excludes ++ dependencies.iterator.flatMap(_.excludes)
+      if (ignoreExcludes) Set.empty[String]
+      else target.excludes ++ dependencies.iterator.flatMap(_.excludes)
     for {
       dependency <- dependencies.iterator
       libraryName <- dependency.libraries.iterator
