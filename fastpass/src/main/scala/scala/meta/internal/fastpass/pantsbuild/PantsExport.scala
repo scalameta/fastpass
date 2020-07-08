@@ -12,6 +12,7 @@ import scala.meta.io.AbsolutePath
 
 import ujson.Bool
 import ujson.Obj
+import ujson.Str
 
 case class PantsExport(
     targets: collection.Map[String, PantsTarget],
@@ -129,8 +130,8 @@ object PantsExport {
         strictDeps = asBoolean(value, PantsKeys.strictDeps),
         exports = asStringList(value, PantsKeys.exports).toSet,
         scope = PantsScope.fromJson(value),
-        targetBase = value.get(PantsKeys.target_base).map(_.str),
-        mainClass = value.get(PantsKeys.main_class).map(_.str)
+        targetBase = asString(value, PantsKeys.target_base),
+        mainClass = asString(value, PantsKeys.main_class)
       )
       targets.put(name, target)
     }
@@ -178,10 +179,18 @@ object PantsExport {
       case _ => false
     }
 
+  private def asString(obj: Obj, key: String): Option[String] =
+    obj.value.get(key).collect {
+      case Str(value) => value
+    }
+
   private def asStringList(obj: Obj, key: String): List[String] =
     obj.value.get(key) match {
       case None => Nil
-      case Some(value) => value.arr.iterator.map(_.str).toList
+      case Some(value) =>
+        value.arr.iterator.collect {
+          case Str(value) => value
+        }.toList
     }
 
 }
