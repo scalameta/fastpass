@@ -34,29 +34,26 @@ object AmendCommand extends Command[AmendOptions]("amend") {
       amend.common,
       app
     ) { project =>
-      amend.targetsToAmend match {
-        case Some(value) => {
-          runAmend(amend, app, project, value)
-        }
-        case None => {
-          Option(System.getenv("EDITOR")) match {
-            case None =>
-              app.error(
-                "the $EDITOR environment variable is undefined. " +
-                  "To fix this problem, run `export EDITOR=vim` " +
-                  "(or `export EDITOR='code -w'` for VS Code) " +
-                  "and try again"
-              )
-              1
-            case Some(editor) =>
-              val list = getTargetsListViaEditor(
-                amend,
-                app,
-                editor,
-                project
-              )
-              list.map(runAmend(amend, app, project, _)).getOrElse(1)
-          }
+      if (amend.targetsToAmend.nonEmpty) {
+        runAmend(amend, app, project, amend.targetsToAmend)
+      } else {
+        Option(System.getenv("EDITOR")) match {
+          case None =>
+            app.error(
+              "the $EDITOR environment variable is undefined. " +
+                "To fix this problem, run `export EDITOR=vim` " +
+                "(or `export EDITOR='code -w'` for VS Code) " +
+                "and try again"
+            )
+            1
+          case Some(editor) =>
+            val list = getTargetsListViaEditor(
+              amend,
+              app,
+              editor,
+              project
+            )
+            list.map(runAmend(amend, app, project, _)).getOrElse(1)
         }
       }
 
