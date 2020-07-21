@@ -9,10 +9,12 @@ import metaconfig.generic
 import metaconfig.generic.Settings
 
 case class OpenOptions(
+    @ExtraName("ij")
     @Description("Open IntelliJ in the given project")
     intellij: Boolean = false,
     @Description("The IntelliJ application or binary to use for launching")
     intellijLauncher: Option[String] = None,
+    @ExtraName("vs")
     @Description("Open VS Code in the given project")
     vscode: Boolean = false,
     @Hidden()
