@@ -2,7 +2,9 @@ package scala.meta.internal.fastpass
 
 import java.io.PrintStream
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.sys.process._
 
@@ -26,7 +28,9 @@ object SystemProcess {
     )
     val exportTimer = new Timer(Time.system)
     scribe.info(args.mkString("process: ", " ", ""))
-    val exit = Process(args, cwd = Some(cwd.toFile())).!(processLogger)
+    val process = Process(args, cwd = Some(cwd.toFile())).run(processLogger)
+    RunningProcesses.submitNewProcess(process)
+    val exit = process.exitValue()
     if (exit != 0) {
       val message = s"$shortName command failed with exit code $exit, " +
         s"to reproduce run the command below:\n\t${reproduceArgs.mkString(" ")}"
@@ -35,4 +39,27 @@ object SystemProcess {
       scribe.info(s"time: ran '$shortName' in $exportTimer")
     }
   }
+
+  object RunningProcesses {
+    var allRunningProcesses: scala.collection.concurrent.Map[Int, Process] =
+      new ConcurrentHashMap[Int, Process]().asScala
+
+    def submitNewProcess(process: Process): Option[Process] = {
+      val processesToRemove = allRunningProcesses
+        .filter { case (_, process) => !process.isAlive() }
+        .map { case (hash, _) => hash }
+      processesToRemove.foreach { hash =>
+        allRunningProcesses.remove(hash)
+      }
+
+      allRunningProcesses.put(process.hashCode(), process)
+    }
+
+    def destroyAll(): Unit = {
+      SystemProcess.RunningProcesses.allRunningProcesses.values.foreach { p =>
+        p.destroy()
+      }
+    }
+  }
+
 }
