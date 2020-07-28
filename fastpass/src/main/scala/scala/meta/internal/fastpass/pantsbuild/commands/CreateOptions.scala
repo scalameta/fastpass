@@ -25,9 +25,7 @@ case class CreateOptions(
     @Hidden() @Inline common: SharedOptions = SharedOptions.default
 ) {
   def actualName: String =
-    name.getOrElse {
-      PantsConfiguration.outputFilename(targets)
-    }
+    PantsConfiguration.outputFilename(name.map(List(_)).getOrElse(targets))
 }
 
 object CreateOptions {

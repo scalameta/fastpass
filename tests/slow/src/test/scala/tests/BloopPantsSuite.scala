@@ -37,7 +37,9 @@ class BloopPantsSuite extends FastpassSuite {
                                  |  println(core.Lib.greeting)
                                  |}
                                  |""".stripMargin)
-    workspace.run("create" :: "::" :: Nil).succeeds
+    workspace
+      .run("create" :: "--name" :: "example/project" :: "::" :: Nil)
+      .succeeds
     val projects = workspace.projects()
     assertEquals(projects.keys, Set("-project-root", "core:core", "src:src"))
 
