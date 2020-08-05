@@ -163,7 +163,7 @@ lazy val fastpass = project
           .resolve(".jabba")
           .resolve("bin")
           .resolve("jabba")
-        val home = s"$jabba which --home graalvm@20.0.0".!!.trim()
+        val home = s"$jabba which --home graalvm-ce-java11@20.1.0".!!.trim()
         Paths.get(home).resolve("bin").resolve("native-image").toString
       }.getOrElse(old)
     },
@@ -172,7 +172,6 @@ lazy val fastpass = project
         Keys.sourceDirectory.in(Compile).value./("graal")./("reflection.json")
       assert(reflectionFile.exists, "no such file: " + reflectionFile)
       List(
-        "-H:+ReportUnsupportedElementsAtRuntime",
         "--initialize-at-build-time",
         "--initialize-at-run-time=scala.meta.internal.fastpass,metaconfig",
         "--no-server",
