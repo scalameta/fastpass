@@ -281,11 +281,12 @@ private class BloopPants(
   lazy val testingFrameworkJars: List[Path] =
     List(
       // NOTE(olafur) This is a fork of the official sbt JUnit testing interface
-      // https://github.com/olafurpg/junit-interface that reproduces the JUnit test
-      // runner in Pants. Most importantly, it automatically registers
-      // org.scalatest.junit.JUnitRunner even if there is no `@RunWith`
+      // https://github.com/scalameta/munit/tree/master/junit-interface that
+      // reproduces the JUnit test runner in Pants. Most importantly, it
+      // automatically registers org.scalatest.junit.JUnitRunner and
+      // org.scalatestplus.junit.JUnitRunner even if there is no `@RunWith`
       // annotation.
-      Dependency.of("org.scalameta", "junit-interface", "0.5.2")
+      Dependency.of("org.scalameta", "junit-interface", "0.7.11")
     ).flatMap(fetchDependency)
 
   private val mutableJarsHome = workspace.resolve(".pants.d")
