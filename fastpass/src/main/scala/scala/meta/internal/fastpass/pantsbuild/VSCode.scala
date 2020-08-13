@@ -7,8 +7,6 @@ import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.pantsbuild.commands.Project
 import scala.meta.io.AbsolutePath
 
-import ujson.Obj
-
 object VSCode {
   def launch(project: Project): Unit =
     try {
