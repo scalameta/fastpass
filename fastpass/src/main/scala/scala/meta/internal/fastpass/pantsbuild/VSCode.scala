@@ -3,26 +3,15 @@ package scala.meta.internal.fastpass.pantsbuild
 import scala.sys.process._
 import scala.util.control.NonFatal
 
-import scala.meta.internal.fastpass.BuildInfo
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.pantsbuild.commands.Project
 import scala.meta.io.AbsolutePath
 
 import ujson.Obj
-import ujson.Str
 
 object VSCode {
   def launch(project: Project): Unit =
     try {
-      val settings = AbsolutePath(project.common.workspace)
-        .resolve(".vscode")
-        .resolve("settings.json")
-      val oldSettings = readSettings(settings)
-      oldSettings("metals.serverVersion") = BuildInfo.metalsVersion
-      oldSettings("metals.pantsTargets") = project.targets.map(Str(_))
-      oldSettings("metals.bloopVersion") = BuildInfo.bloopNightlyVersion
-      settings.writeText(ujson.write(oldSettings, indent = 2))
-      scribe.info(s"updated: $settings")
       val code = codeCommand()
       exec(code, "--install-extension", "scalameta.metals")
       exec(code, "--new-window", project.common.workspace.toString())
@@ -83,12 +72,5 @@ object VSCode {
           .take(1)
           .headOption
     } yield file
-  }
-  private def readSettings(settings: AbsolutePath): Obj = {
-    if (settings.isFile) {
-      ujson.read(settings.readText).obj
-    } else {
-      Obj()
-    }
   }
 }

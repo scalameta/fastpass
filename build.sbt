@@ -7,7 +7,6 @@ lazy val V = new {
   val metaconfig = "0.9.10"
   val scalameta = "4.3.10"
   val bsp = "2.0.0-M4+10-61e61e87"
-  val metals = "0.9.0"
   val munit = "0.7.7"
 }
 
@@ -140,7 +139,6 @@ lazy val fastpass = project
     ),
     buildInfoPackage := "scala.meta.internal.fastpass",
     buildInfoKeys := Seq[BuildInfoKey](
-      "metalsVersion" -> V.metals,
       "fastpassVersion" -> version.value,
       "bspVersion" -> V.bsp,
       "bloopVersion" -> V.bloop,
