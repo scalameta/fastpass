@@ -9,62 +9,85 @@ import bloop.config.Config.Project
 trait BloopAssertions extends munit.Assertions {
   implicit class ProjectAssertions(val project: Project) {
 
-    def dependsOn(other: Project): Project =
+    def dependsOn(others: Project*): Project =
       chain {
-        assert(
-          project.dependencies.contains(other.name),
-          s"`${project.name}` doesn't depend on `${other.name}`."
-        )
+        others.foreach { other =>
+          assert(
+            project.dependencies.contains(other.name),
+            s"`${project.name}` doesn't depend on `${other.name}`."
+          )
+        }
       }
 
-    def doesntDependOn(other: Project): Project =
+    def doesntDependOn(others: Project*): Project =
       chain {
-        assert(
-          !project.dependencies.contains(other.name),
-          s"`${project.name}` depends on `${other.name}`."
-        )
+        others.foreach { other =>
+          assert(
+            !project.dependencies.contains(other.name),
+            s"`${project.name}` depends on `${other.name}`."
+          )
+        }
       }
 
-    def doesntHaveBinaryOnCompileClasspath(jar: String): Project =
+    def doesntHaveBinariesOnCompileClasspath(jars: String*): Project =
       chain {
-        assertClasspathDoesntContain(project.classpath, jar)
+        jars.foreach(assertClasspathDoesntContain(project.classpath, _))
       }
 
-    def hasBinaryOnCompileClasspath(
-        jar: String
+    def hasBinariesOnCompileClasspath(
+        jars: String*
     )(implicit loc: munit.Location): Project =
       chain {
-        assertClasspathContains(project.classpath, jar)
+        jars.foreach(assertClasspathContains(project.classpath, _))
       }
 
-    def doesntHaveBinaryOnRuntimeClasspath(jar: String): Project =
+    def doesntHaveBinariesOnRuntimeClasspath(jars: String*): Project =
       chain {
-        onRuntimeClasspath(assertClasspathDoesntContain(_, jar))
+        jars.foreach { jar =>
+          onRuntimeClasspath(assertClasspathDoesntContain(_, jar))
+        }
       }
 
-    def hasBinaryOnRuntimeClasspath(jar: String): Project =
+    def hasBinariesOnRuntimeClasspath(jars: String*): Project =
       chain {
-        onRuntimeClasspath(assertClasspathContains(_, jar))
+        jars.foreach { jar =>
+          onRuntimeClasspath(assertClasspathContains(_, jar))
+        }
       }
 
-    def doesntHaveProjectOnCompileClasspath(other: Project): Project =
+    def doesntHaveProjectsOnCompileClasspath(others: Project*): Project =
       chain {
-        assertClasspathDoesntContain(project.classpath, other.classesDir)
+        others.foreach { other =>
+          assertClasspathDoesntContain(project.classpath, other.classesDir)
+        }
       }
 
-    def hasProjectOnCompileClasspath(other: Project): Project =
+    def hasProjectsOnCompileClasspath(others: Project*): Project =
       chain {
-        assertClasspathContains(project.classpath, other.classesDir)
+        others.foreach { other =>
+          assertClasspathContains(project.classpath, other.classesDir)
+        }
+        val othersIndices =
+          others.map(p => project.classpath.indexOf(p.classesDir))
+        assert(othersIndices == othersIndices.sorted)
       }
 
-    def doesntHaveProjectOnRuntimeClasspath(other: Project): Project =
+    def doesntHaveProjectsOnRuntimeClasspath(others: Project*): Project =
       chain {
-        onRuntimeClasspath(assertClasspathDoesntContain(_, other.classesDir))
+        others.foreach { other =>
+          onRuntimeClasspath(assertClasspathDoesntContain(_, other.classesDir))
+        }
       }
 
-    def hasProjectOnRuntimeClasspath(other: Project): Project =
+    def hasProjectsOnRuntimeClasspath(others: Project*): Project =
       chain {
-        onRuntimeClasspath(assertClasspathContains(_, other.classesDir))
+        onRuntimeClasspath { classpath =>
+          others.foreach { other =>
+            assertClasspathContains(classpath, other.classesDir)
+          }
+          val othersIndices = others.map(p => classpath.indexOf(p.classesDir))
+          assert(othersIndices == othersIndices.sorted)
+        }
       }
 
     private def onRuntimeClasspath(op: List[Path] => Unit): Unit = {
