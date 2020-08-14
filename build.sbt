@@ -209,3 +209,11 @@ lazy val slow = project
     ),
     BuildInfoPlugin.buildInfoScopedSettings(Test)
   )
+
+lazy val benchmarks = project
+  .in(file("benchmarks"))
+  .enablePlugins(JmhPlugin)
+  .dependsOn(fastpass)
+  .settings(
+    skip in publish := true
+  )
