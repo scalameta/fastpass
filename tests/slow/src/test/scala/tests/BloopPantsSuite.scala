@@ -350,4 +350,127 @@ class BloopPantsSuite extends FastpassSuite {
       .doesntHaveBinariesOnRuntimeClasspath("test-interface-1.0.jar")
   }
 
+  test("order classpath using BFS") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/lib/BUILD
+                                 |scala_library(
+                                 |  name="a",
+                                 |  sources=['a/**/*.scala'],
+                                 |  dependencies=[':b', ':c']
+                                 |)
+                                 |scala_library(
+                                 |  name="b",
+                                 |  sources=['b/**/*.scala'],
+                                 |  dependencies=[':d']
+                                 |)
+                                 |scala_library(
+                                 |  name="c",
+                                 |  sources=['c/**/*.scala'],
+                                 |  dependencies=[':f']
+                                 |)
+                                 |scala_library(
+                                 |  name="d",
+                                 |  sources=['d/**/*.scala'],
+                                 |  dependencies=[':e']
+                                 |)
+                                 |scala_library(
+                                 |  name="e",
+                                 |  sources=['e/**/*.scala']
+                                 |)
+                                 |scala_library(
+                                 |  name="f",
+                                 |  sources=['f/**/*.scala'],
+                                 |  dependencies=[':g']
+                                 |)
+                                 |scala_library(
+                                 |  name="g",
+                                 |  sources=['g/**/*.scala']
+                                 |)
+                                 |""".stripMargin)
+    workspace.run("create" :: "--name" :: "test" :: "lib::" :: Nil).succeeds
+    val projects = workspace.projects()
+    val a = projects("lib:a")
+    val b = projects("lib:b")
+    val c = projects("lib:c")
+    val d = projects("lib:d")
+    val e = projects("lib:e")
+    val f = projects("lib:f")
+    val g = projects("lib:g")
+
+    a.hasProjectsOnCompileClasspath(b, c, d, f, e, g)
+    b.hasProjectsOnCompileClasspath(d, e)
+      .doesntHaveProjectsOnCompileClasspath(a, c, f, g)
+    c.hasProjectsOnCompileClasspath(f, g)
+      .doesntHaveProjectsOnCompileClasspath(a, b, d, e)
+    d.hasProjectsOnCompileClasspath(e)
+      .doesntHaveProjectsOnCompileClasspath(a, b, c, f, g)
+    e.doesntHaveProjectsOnCompileClasspath(a, b, c, f, g)
+    f.hasProjectsOnCompileClasspath(g)
+      .doesntHaveProjectsOnCompileClasspath(a, b, c, d, e)
+    g.doesntHaveProjectsOnCompileClasspath(a, b, c, d, e, f)
+
+  }
+
+  test("order classpath using BFS with strict deps") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/lib/BUILD
+                                 |scala_library(
+                                 |  name="a",
+                                 |  sources=['a/**/*.scala'],
+                                 |  dependencies=[':b', ':d'],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="b",
+                                 |  sources=['b/**/*.scala'],
+                                 |  dependencies=[':c'],
+                                 |  exports=[':c'],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="c",
+                                 |  sources=['c/**/*.scala'],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="d",
+                                 |  sources=['d/**/*.scala'],
+                                 |  dependencies=[':e'],
+                                 |  exports=[":e"],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="e",
+                                 |  sources=['e/**/*.scala'],
+                                 |  dependencies=[':f'],
+                                 |  exports=[':f'],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="f",
+                                 |  sources=['f/**/*.scala'],
+                                 |  strict_deps=True
+                                 |)
+                                 |""".stripMargin)
+    workspace.run("create" :: "--name" :: "test" :: "lib::" :: Nil).succeeds
+    val projects = workspace.projects()
+
+    val a = projects("lib:a")
+    val b = projects("lib:b")
+    val c = projects("lib:c")
+    val d = projects("lib:d")
+    val e = projects("lib:e")
+    val f = projects("lib:f")
+
+    a.hasProjectsOnCompileClasspath(b, d, c, e, f)
+    b.hasProjectsOnCompileClasspath(c)
+      .doesntHaveProjectsOnCompileClasspath(a, d, e, f)
+    c.doesntHaveProjectsOnCompileClasspath(a, b, d, e, f)
+    d.hasProjectsOnCompileClasspath(e, f)
+      .doesntHaveProjectsOnCompileClasspath(a, b, c)
+    e.hasProjectsOnCompileClasspath(f)
+      .doesntHaveProjectsOnCompileClasspath(a, b, c, d)
+    f.doesntHaveProjectsOnCompileClasspath(a, b, c, d, e)
+  }
+
 }

@@ -422,7 +422,6 @@ private class BloopPants(
       libraries: Iterable[PantsLibrary]
   ): List[Path] = {
     val classpathEntries = new ju.LinkedHashSet[Path]
-    val result = mutable.ListBuffer.empty[Path]
     for {
       dependency <- transitiveDependencies.iterator
     } {
