@@ -45,8 +45,8 @@ class BloopPantsSuite extends FastpassSuite {
 
     projects("src:src")
       .dependsOn(projects("core:core"))
-      .hasProjectOnCompileClasspath(projects("core:core"))
-      .hasProjectOnRuntimeClasspath(projects("core:core"))
+      .hasProjectsOnCompileClasspath(projects("core:core"))
+      .hasProjectsOnRuntimeClasspath(projects("core:core"))
   }
 
   test("respects strict_deps") {
@@ -85,10 +85,9 @@ class BloopPantsSuite extends FastpassSuite {
     val projects0 = workspace.projects()
     assertEquals(projects0.keys, Set("c:c"))
     projects0("c:c")
-      .doesntHaveBinaryOnCompileClasspath("a.a.jar")
-      .hasBinaryOnCompileClasspath("b.b.jar")
-      .hasBinaryOnRuntimeClasspath("a.a.jar")
-      .hasBinaryOnRuntimeClasspath("b.b.jar")
+      .doesntHaveBinariesOnCompileClasspath("a.a.jar")
+      .hasBinariesOnCompileClasspath("b.b.jar")
+      .hasBinariesOnRuntimeClasspath("a.a.jar", "b.b.jar")
 
     workspace
       .run("amend" :: "test" :: "--new-targets" :: "b::,c::" :: Nil)
@@ -99,13 +98,13 @@ class BloopPantsSuite extends FastpassSuite {
       Set("b:b", "c:c")
     )
     projects1("b:b")
-      .hasBinaryOnCompileClasspath("a.a.jar")
-      .hasBinaryOnRuntimeClasspath("a.a.jar")
+      .hasBinariesOnCompileClasspath("a.a.jar")
+      .hasBinariesOnRuntimeClasspath("a.a.jar")
     projects1("c:c")
-      .doesntHaveBinaryOnCompileClasspath("a.a.jar")
-      .hasProjectOnCompileClasspath(projects1("b:b"))
-      .hasBinaryOnRuntimeClasspath("a.a.jar")
-      .hasProjectOnRuntimeClasspath(projects1("b:b"))
+      .doesntHaveBinariesOnCompileClasspath("a.a.jar")
+      .hasProjectsOnCompileClasspath(projects1("b:b"))
+      .hasBinariesOnRuntimeClasspath("a.a.jar")
+      .hasProjectsOnRuntimeClasspath(projects1("b:b"))
 
     workspace
       .run("amend" :: "test" :: "--new-targets" :: "a::,b::,c::" :: Nil)
@@ -116,13 +115,12 @@ class BloopPantsSuite extends FastpassSuite {
       Set("a:a", "b:b", "c:c")
     )
     projects2("b:b")
-      .hasProjectOnCompileClasspath(projects2("a:a"))
-      .hasProjectOnRuntimeClasspath(projects2("a:a"))
+      .hasProjectsOnCompileClasspath(projects2("a:a"))
+      .hasProjectsOnRuntimeClasspath(projects2("a:a"))
     projects2("c:c")
-      .doesntHaveProjectOnCompileClasspath(projects2("a:a"))
-      .hasProjectOnCompileClasspath(projects2("b:b"))
-      .hasProjectOnRuntimeClasspath(projects2("a:a"))
-      .hasProjectOnRuntimeClasspath(projects2("b:b"))
+      .doesntHaveProjectsOnCompileClasspath(projects2("a:a"))
+      .hasProjectsOnCompileClasspath(projects2("b:b"))
+      .hasProjectsOnRuntimeClasspath(projects2("b:b"), projects2("a:a"))
   }
 
   test("ignores jvm_app") {
@@ -202,8 +200,8 @@ class BloopPantsSuite extends FastpassSuite {
     val projects0 = workspace.projects()
     assertEquals(projects0.keys, Set("app:my-binary"))
     projects0("app:my-binary")
-      .hasBinaryOnCompileClasspath("libs.my-library.jar")
-      .hasBinaryOnRuntimeClasspath("libs.my-library.jar")
+      .hasBinariesOnCompileClasspath("libs.my-library.jar")
+      .hasBinariesOnRuntimeClasspath("libs.my-library.jar")
 
     workspace
       .run(
@@ -220,8 +218,8 @@ class BloopPantsSuite extends FastpassSuite {
       )
     )
     projects1("app:my-binary")
-      .hasProjectOnCompileClasspath(projects1("libs:my-library"))
-      .hasProjectOnRuntimeClasspath(projects1("libs:my-library"))
+      .hasProjectsOnCompileClasspath(projects1("libs:my-library"))
+      .hasProjectsOnRuntimeClasspath(projects1("libs:my-library"))
 
   }
 
@@ -348,8 +346,131 @@ class BloopPantsSuite extends FastpassSuite {
     val projects = workspace.projects()
 
     projects("lib:lib0")
-      .hasBinaryOnCompileClasspath("test-interface-1.0.jar")
-      .doesntHaveBinaryOnRuntimeClasspath("test-interface-1.0.jar")
+      .hasBinariesOnCompileClasspath("test-interface-1.0.jar")
+      .doesntHaveBinariesOnRuntimeClasspath("test-interface-1.0.jar")
+  }
+
+  test("order classpath using BFS") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/lib/BUILD
+                                 |scala_library(
+                                 |  name="a",
+                                 |  sources=['a/**/*.scala'],
+                                 |  dependencies=[':b', ':c']
+                                 |)
+                                 |scala_library(
+                                 |  name="b",
+                                 |  sources=['b/**/*.scala'],
+                                 |  dependencies=[':d']
+                                 |)
+                                 |scala_library(
+                                 |  name="c",
+                                 |  sources=['c/**/*.scala'],
+                                 |  dependencies=[':f']
+                                 |)
+                                 |scala_library(
+                                 |  name="d",
+                                 |  sources=['d/**/*.scala'],
+                                 |  dependencies=[':e']
+                                 |)
+                                 |scala_library(
+                                 |  name="e",
+                                 |  sources=['e/**/*.scala']
+                                 |)
+                                 |scala_library(
+                                 |  name="f",
+                                 |  sources=['f/**/*.scala'],
+                                 |  dependencies=[':g']
+                                 |)
+                                 |scala_library(
+                                 |  name="g",
+                                 |  sources=['g/**/*.scala']
+                                 |)
+                                 |""".stripMargin)
+    workspace.run("create" :: "--name" :: "test" :: "lib::" :: Nil).succeeds
+    val projects = workspace.projects()
+    val a = projects("lib:a")
+    val b = projects("lib:b")
+    val c = projects("lib:c")
+    val d = projects("lib:d")
+    val e = projects("lib:e")
+    val f = projects("lib:f")
+    val g = projects("lib:g")
+
+    a.hasProjectsOnCompileClasspath(b, c, d, f, e, g)
+    b.hasProjectsOnCompileClasspath(d, e)
+      .doesntHaveProjectsOnCompileClasspath(a, c, f, g)
+    c.hasProjectsOnCompileClasspath(f, g)
+      .doesntHaveProjectsOnCompileClasspath(a, b, d, e)
+    d.hasProjectsOnCompileClasspath(e)
+      .doesntHaveProjectsOnCompileClasspath(a, b, c, f, g)
+    e.doesntHaveProjectsOnCompileClasspath(a, b, c, f, g)
+    f.hasProjectsOnCompileClasspath(g)
+      .doesntHaveProjectsOnCompileClasspath(a, b, c, d, e)
+    g.doesntHaveProjectsOnCompileClasspath(a, b, c, d, e, f)
+
+  }
+
+  test("order classpath using BFS with strict deps") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/lib/BUILD
+                                 |scala_library(
+                                 |  name="a",
+                                 |  sources=['a/**/*.scala'],
+                                 |  dependencies=[':b', ':d'],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="b",
+                                 |  sources=['b/**/*.scala'],
+                                 |  dependencies=[':c'],
+                                 |  exports=[':c'],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="c",
+                                 |  sources=['c/**/*.scala'],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="d",
+                                 |  sources=['d/**/*.scala'],
+                                 |  dependencies=[':e'],
+                                 |  exports=[":e"],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="e",
+                                 |  sources=['e/**/*.scala'],
+                                 |  dependencies=[':f'],
+                                 |  exports=[':f'],
+                                 |  strict_deps=True
+                                 |)
+                                 |scala_library(
+                                 |  name="f",
+                                 |  sources=['f/**/*.scala'],
+                                 |  strict_deps=True
+                                 |)
+                                 |""".stripMargin)
+    workspace.run("create" :: "--name" :: "test" :: "lib::" :: Nil).succeeds
+    val projects = workspace.projects()
+
+    val a = projects("lib:a")
+    val b = projects("lib:b")
+    val c = projects("lib:c")
+    val d = projects("lib:d")
+    val e = projects("lib:e")
+    val f = projects("lib:f")
+
+    a.hasProjectsOnCompileClasspath(b, d, c, e, f)
+    b.hasProjectsOnCompileClasspath(c)
+      .doesntHaveProjectsOnCompileClasspath(a, d, e, f)
+    c.doesntHaveProjectsOnCompileClasspath(a, b, d, e, f)
+    d.hasProjectsOnCompileClasspath(e, f)
+      .doesntHaveProjectsOnCompileClasspath(a, b, c)
+    e.hasProjectsOnCompileClasspath(f)
+      .doesntHaveProjectsOnCompileClasspath(a, b, c, d)
+    f.doesntHaveProjectsOnCompileClasspath(a, b, c, d, e)
   }
 
 }

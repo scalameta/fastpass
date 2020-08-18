@@ -14,6 +14,11 @@ final case class PantsScope(scope: String) {
     isDefault ||
       scope.contains("runtime") ||
       scope.contains("test")
+  def is(scope: SearchScope): Boolean =
+    scope match {
+      case CompileScope => isCompile
+      case RuntimeScope => isRuntime
+    }
 }
 
 object PantsScope {
