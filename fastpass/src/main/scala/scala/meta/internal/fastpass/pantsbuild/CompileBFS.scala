@@ -78,7 +78,7 @@ class CompileBFS(export: PantsExport, mode: StrictDepsMode) {
 
   private def exportDepthMap(target: PantsTarget): DepthMap = {
     def uncached(): DepthMap = {
-      val result = new mutable.ArrayBuffer[mutable.ArrayBuffer[PantsTarget]]
+      val result = new DepthMap
       val seen = new IdentityHashSet[PantsTarget]
       val exports = exportedTargets(target).filter(seen.add)
       if (exports.nonEmpty) {
