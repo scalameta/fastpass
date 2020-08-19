@@ -112,7 +112,7 @@ object PantsConfiguration {
     buf.result().map(workspace.resolve)
   }
   def outputFilename(target: String): String = {
-    target.replace('/', '.').replaceAll("[^a-zA-Z0-9\\._]", "")
+    target.replace('/', '.').replaceAll("[^a-zA-Z0-9\\._-]", "")
   }
   def outputFilename(targets: List[String]): String = {
     val processed = targets
