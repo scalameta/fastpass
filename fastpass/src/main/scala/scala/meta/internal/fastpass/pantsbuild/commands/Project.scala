@@ -1,5 +1,7 @@
 package scala.meta.internal.fastpass.pantsbuild.commands
 
+import java.nio.file.Files
+
 import scala.util.Try
 
 import scala.meta.internal.fastpass.FastpassEnrichments._
@@ -100,6 +102,15 @@ object Project {
         sources,
         strictDeps
       )
+    }
+  }
+  def current(common: SharedOptions): Option[Project] = {
+    val workspaceBloop = common.bloopDirectory
+    if (!Files.isSymbolicLink(workspaceBloop)) {
+      None
+    } else {
+      val target = Files.readSymbolicLink(workspaceBloop)
+      fromCommon(common).find(_.root.bloopRoot.toNIO == target)
     }
   }
 
