@@ -51,6 +51,7 @@ object BloopPants {
     commands = List(
       HelpCommand,
       VersionCommand,
+      CurrentCommand,
       CreateCommand,
       RefreshCommand,
       ListCommand,
