@@ -1,6 +1,6 @@
 lazy val V = new {
   val scala212 = "2.12.11"
-  val bloop = "1.4.3"
+  val bloop = "1.4.4"
   val coursierInterfaces = "0.0.22"
   val scribe = "2.7.12"
   val ujson = "1.1.0"
