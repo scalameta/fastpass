@@ -22,6 +22,20 @@ import bloop.config.Config.SourcesGlobs
 
 /** Helper class to generate `*-sources.jar` files. */
 class SourcesJarBuilder(export: PantsExport, root: Path) {
+  def writeSourceRoot(sourceRoot: RelativePath): Unit =
+    try {
+      val out =
+        root.resolve("META-INF").resolve("fastpass").resolve("source-root")
+      Files.createDirectories(out.getParent)
+      Files.write(
+        out,
+        sourceRoot.toString().getBytes(StandardCharsets.UTF_8),
+        StandardOpenOption.CREATE,
+        StandardOpenOption.TRUNCATE_EXISTING
+      )
+    } catch {
+      case NonFatal(_) =>
+    }
 
   private def write(source: AbsolutePath, path: RelativePath): Unit = {
     val out = root.resolve(path.toString())
