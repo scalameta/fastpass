@@ -1,5 +1,7 @@
 package tests
 
+import java.nio.charset.StandardCharsets
+
 import scala.meta.internal.io.FileIO
 import scala.meta.io.AbsolutePath
 
@@ -261,10 +263,29 @@ class BloopPantsSuite extends FastpassSuite {
     assertNoDiff(
       relativePaths.sorted.mkString("\n"),
       """
+        |META-INF/fastpass/source-root
         |lib/Hello1.scala
         |lib/Hello2.scala
         |""".stripMargin
     )
+
+    val sourceRootContents = {
+      FileIO.withJarFileSystem(
+        AbsolutePath(libSources),
+        create = false,
+        close = true
+      ) { root =>
+        val bytes = FileIO
+          .readAllBytes(root.resolve("META-INF/fastpass/source-root"))
+        new String(bytes, StandardCharsets.UTF_8)
+      }
+    }
+
+    assertNoDiff(
+      "lib/src/main/scala",
+      sourceRootContents
+    )
+
   }
 
   test("specify main_class") {
