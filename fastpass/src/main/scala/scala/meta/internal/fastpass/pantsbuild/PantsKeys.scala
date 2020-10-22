@@ -21,6 +21,7 @@ object PantsKeys {
   val sourceRoot = "source_root"
   val preferredJvmDistributions = "preferred_jvm_distributions"
   val platform = "platform"
+  val runtimePlatform = "runtime_platform"
   val jvmPlatforms = "jvm_platforms"
   val defaultPlatform = "default_platform"
   val java8 = "java8"
