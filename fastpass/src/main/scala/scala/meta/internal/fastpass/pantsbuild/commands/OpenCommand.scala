@@ -1,8 +1,5 @@
 package scala.meta.internal.fastpass.pantsbuild.commands
 
-import scala.meta.internal.fastpass.pantsbuild.IntelliJ
-import scala.meta.internal.fastpass.pantsbuild.VSCode
-
 import metaconfig.cli.CliApp
 import metaconfig.cli.Command
 import metaconfig.cli.Messages
@@ -51,12 +48,7 @@ object OpenCommand extends Command[OpenOptions]("open") {
         onEmpty(project, app)
         1
       } else {
-        if (open.intellij) {
-          IntelliJ.launch(project, open)
-        }
-        if (open.vscode) {
-          VSCode.launch(project)
-        }
+        open.launch(project)
         0
       }
     }

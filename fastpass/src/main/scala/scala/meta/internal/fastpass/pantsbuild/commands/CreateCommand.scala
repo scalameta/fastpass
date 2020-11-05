@@ -4,8 +4,6 @@ import java.io.File
 
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.pantsbuild.Export
-import scala.meta.internal.fastpass.pantsbuild.IntelliJ
-import scala.meta.internal.fastpass.pantsbuild.VSCode
 import scala.meta.internal.io.PathIO
 import scala.meta.io.AbsolutePath
 
@@ -47,18 +45,16 @@ object CreateCommand extends Command[CreateOptions]("create") {
     val name = create.actualName
     Project.fromName(name, create.common) match {
       case Some(value) =>
-        app.warn(
+        app.error(
           s"can't create project named '${name}' because it already exists." +
             s"\n\tTo refresh the project run: 'fastpass refresh ${name}'" +
             s"\n\tTo open the project run: 'fastpass open --intellij ${name}'" +
             s"\n\t                     or: 'fastpass open --vscode ${name}'"
         )
-        if (create.open.intellij) {
-          IntelliJ.launch(value, OpenOptions.default)
-        } else if (create.open.vscode) {
-          VSCode.launch(value)
-        }
-        0
+        if (create.open.launch(value))
+          0
+        else
+          1
 
       case None =>
         val project = Project.create(
