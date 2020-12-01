@@ -41,8 +41,8 @@ jobs:
       - uses: actions/cache@v1
         with:
           path: tests/slow/target/pants
-          key: ${{ runner.os }}-pants-repo-${{ hashFiles('project/PantsRepo.scala') }}
-          restore-keys: ${{ runner.os }}-pants-repo-${{ hashFiles('project/PantsRepo.scala') }}
+          key: ${{ runner.os }}-pants-repo-${{ hashFiles('project/PantsRepo.scala') }}-1
+          restore-keys: ${{ runner.os }}-pants-repo-${{ hashFiles('project/PantsRepo.scala') }}-1
       - uses: actions/cache@v1
         with:
           path: ~/.cache/pants

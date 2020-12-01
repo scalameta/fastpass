@@ -2,6 +2,9 @@ package scala.meta.internal.fastpass.pantsbuild.commands
 
 import java.nio.file.Path
 
+import scala.meta.internal.fastpass.pantsbuild.IntelliJ
+import scala.meta.internal.fastpass.pantsbuild.VSCode
+
 import metaconfig.ConfDecoder
 import metaconfig.ConfEncoder
 import metaconfig.annotation._
@@ -28,9 +31,23 @@ case class OpenOptions(
 ) {
   def withProject(project: Project): OpenOptions =
     copy(projects = List(project.name))
+
   def withWorkspace(workspace: Path): OpenOptions =
     copy(common = common.copy(workspace = workspace))
+
   def isEmpty: Boolean = !intellij && !vscode
+
+  def launch(project: Project): Boolean = {
+    if (intellij) {
+      IntelliJ.launch(project, this)
+      true
+    } else if (vscode) {
+      VSCode.launch(project)
+      true
+    } else {
+      false
+    }
+  }
 }
 
 object OpenOptions {
