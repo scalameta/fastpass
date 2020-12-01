@@ -161,12 +161,13 @@ object IntelliJ {
     } else if (Files.exists(destination)) {
       throw new IllegalArgumentException(s"file already exists: destination")
     } else {
-      val url = new URL("https://git.io/coursier-cli")
+      val url = sys.env
+        .getOrElse("FASTPASS_COURSIER_URL", "https://git.io/coursier-cli")
       Files.copy(
-        url.openConnection().getInputStream(),
+        new URL(url).openConnection().getInputStream(),
         destination
       )
-      destination.toFile().setExecutable(true)
+      destination.toFile.setExecutable(true)
       destination
     }
   }
