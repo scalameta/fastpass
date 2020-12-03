@@ -10,6 +10,7 @@ class PantsTarget(
     val javaSources: collection.Seq[String],
     val excludes: collection.Set[String],
     val platform: Option[String],
+    val runtimePlatform: Option[String],
     val libraries: collection.Seq[String],
     val isPantsTargetRoot: Boolean,
     val isPantsModulizable: Boolean,

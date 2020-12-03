@@ -558,6 +558,7 @@ private class BloopPants(
     val out: Path = bloopDir.resolve(target.directoryName)
     val classesDir = target.classesDir
     val javaHome: Option[Path] = target.platform.map(Paths.get(_))
+    val runtimeJavaHome: Option[Path] = target.runtimePlatform.map(Paths.get(_))
 
     val resources: Option[List[Path]] =
       if (!target.targetType.isResourceOrTestResource) None
@@ -580,6 +581,9 @@ private class BloopPants(
     val extraJvmOptions =
       if (target.targetType.isTest) target.extraJvmOptions else Nil
 
+    val fullJvmOptions =
+      List(s"-Duser.dir=$workspace") ++ extraJvmOptions
+
     C.Project(
       name = target.dependencyName,
       directory = baseDirectory,
@@ -600,11 +604,15 @@ private class BloopPants(
         C.Platform.Jvm(
           C.JvmConfig(
             javaHome,
-            List(
-              s"-Duser.dir=$workspace"
-            ) ++ extraJvmOptions
+            fullJvmOptions
           ),
           target.mainClass,
+          runtimeJavaHome.map(_ =>
+            C.JvmConfig(
+              runtimeJavaHome,
+              fullJvmOptions
+            )
+          ),
           Some(runtimeClasspath),
           None
         )

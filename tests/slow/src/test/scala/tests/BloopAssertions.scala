@@ -92,7 +92,7 @@ trait BloopAssertions extends munit.Assertions {
 
     private def onRuntimeClasspath(op: List[Path] => Unit): Unit = {
       project.platform match {
-        case Some(Platform.Jvm(_, _, Some(runtimeClasspath), _)) =>
+        case Some(Platform.Jvm(_, _, _, Some(runtimeClasspath), _)) =>
           op(runtimeClasspath)
         case _ =>
           op(project.classpath)

@@ -71,6 +71,10 @@ object PantsExport {
         platform <- value.get(PantsKeys.platform)
         javaHome <- jvmPlatforms.get(platform.str)
       } yield javaHome
+      val runtimePlatform = for {
+        runtimePlatform <- value.get(PantsKeys.runtimePlatform)
+        javaHome <- jvmPlatforms.get(runtimePlatform.str)
+      } yield javaHome
       val libraries: mutable.ArrayBuffer[String] =
         value(PantsKeys.libraries).arr.map(_.str.intern())
       val compileLibraries: mutable.ArrayBuffer[String] = value
@@ -112,6 +116,7 @@ object PantsExport {
         javaSources = javaSources,
         excludes = excludes.asScala,
         platform = platform,
+        runtimePlatform = runtimePlatform,
         libraries = libraries,
         isPantsTargetRoot = isPantsTargetRoot,
         isPantsModulizable = isPantsModulizable,
