@@ -40,7 +40,8 @@ class CompileBFS(export: PantsExport, mode: StrictDepsMode) {
         result += mutable.ArrayBuffer.concat(deps.filter(seen.add))
 
         val newDepth =
-          if (target.pantsTargetType.isTarget) depth
+          if (target.pantsTargetType.isTarget || target.pantsTargetType.isAlias)
+            depth
           else depth - 1
 
         val depsDepthMaps = deps.map(depthMap(_, newDepth))
@@ -105,9 +106,9 @@ class CompileBFS(export: PantsExport, mode: StrictDepsMode) {
     if (!target.scope.isCompile) Nil
     else {
       if (
-        target.pantsTargetType.isTarget || target.pantsTargetType.isJarLibrary
+        target.pantsTargetType.isTarget || target.pantsTargetType.isAlias || target.pantsTargetType.isJarLibrary
       ) {
-        // NOTE(olafur): it seems like `target` and `jar_library` types
+        // NOTE(olafur): it seems like `target`, `alias` and `jar_library` types
         // export their dependencies even if they have an empty `exports`
         // field. This should probably be reflected in the output of
         // `export-fastpass` but for now it's OK to do this logic on the
