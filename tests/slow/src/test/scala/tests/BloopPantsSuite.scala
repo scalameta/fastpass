@@ -494,4 +494,66 @@ class BloopPantsSuite extends FastpassSuite {
     f.doesntHaveProjectsOnCompileClasspath(a, b, c, d, e)
   }
 
+  test("`target` and `alias` export their dependencies") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/lib/BUILD
+                                 |junit_tests(
+                                 |  name = "root-project",
+                                 |  sources = ["root-project/**/*.scala"],
+                                 |  compiler_option_sets = ["fatal_warnings"],
+                                 |  strict_deps = True,
+                                 |  dependencies = [
+                                 |    ":some-target"
+                                 |  ]
+                                 |)
+                                 |
+                                 |target(
+                                 |  name = "some-target",
+                                 |  dependencies = [
+                                 |    ":scala-lib"
+                                 |  ]
+                                 |)
+                                 |
+                                 |scala_library(
+                                 |  name = "scala-lib",
+                                 |  compiler_option_sets = ["fatal_warnings"],
+                                 |  strict_deps = True,
+                                 |  dependencies = [
+                                 |    ":intermediate-target"
+                                 |  ],
+                                 |  exports = [
+                                 |    ":intermediate-target"
+                                 |  ]
+                                 |)
+                                 |
+                                 |alias(
+                                 |  name = "intermediate-target",
+                                 |  target = ":intermediate-target-actual"
+                                 |)
+                                 |
+                                 |alias(
+                                 |  name = "intermediate-target-actual",
+                                 |  target = ":actual-dependency"
+                                 |)
+                                 |
+                                 |scala_library(
+                                 |  name = "actual-dependency",
+                                 |  sources = ["actual-dependency/**/*.scala"],
+                                 |  compiler_option_sets = ["fatal_warnings"],
+                                 |  strict_deps = True
+                                 |)
+                                 |
+                                 |/lib/actual-dependency/foo/Foo.scala
+                                 |object Foo""".stripMargin)
+
+    workspace
+      .run("create" :: "--name" :: "test" :: "lib:root-project" :: Nil)
+      .succeeds
+    val projects = workspace.projects()
+
+    val rootProject = projects("lib:root-project")
+
+    rootProject.hasBinariesOnCompileClasspath("lib.actual-dependency.jar")
+  }
+
 }
