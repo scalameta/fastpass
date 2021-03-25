@@ -86,7 +86,7 @@ object SharedCommand {
           deleteSymlinkDirectories(export.project)
 
           if (export.export.canBloopExit) {
-            restartBloopIfNewSettings(AbsolutePath(workspace))
+            restartBloopIfNewSettings(AbsolutePath(workspace), export.app)
           }
           if (export.open.isEmpty) {
             OpenCommand.onEmpty(export.project, export.app)
@@ -101,13 +101,13 @@ object SharedCommand {
     }
   }
 
-  def restartBloopIfNewSettings(workspace: AbsolutePath): Unit = {
+  def restartBloopIfNewSettings(workspace: AbsolutePath, app: CliApp): Unit = {
     val isUpdatedBloopSettings =
       BloopGlobalSettings.update(workspace, defaultJavaHomePath)
     if (isUpdatedBloopSettings) {
       restartBloopServer()
     } else {
-      restartOldBloopServer()
+      restartOldBloopServer(app)
     }
   }
 
@@ -166,21 +166,25 @@ object SharedCommand {
   }
 
   /** Upgrades the Bloop server if it's known to be an old version. */
-  private def restartOldBloopServer(): Unit = {
+  private def restartOldBloopServer(app: CliApp): Unit = {
     val isOutdated = Set[String](
       "1.4.0-RC1-235-3231567a", "1.4.0-RC1-190-ef7d8dba",
       "1.4.0-RC1-167-61fbbe08", "1.4.0-RC1-69-693de22a",
-      "1.4.0-RC1+33-dfd03f53", "1.4.0-RC1", "1.4.1", "1.4.2", "1.4.3", "1.4.4"
+      "1.4.0-RC1+33-dfd03f53", "1.4.0-RC1", "1.4.1", "1.4.2", "1.4.3", "1.4.4",
+      "1.4.6"
     )
     Try {
-      val version = List("bloop", "--version").!!.linesIterator
+      val version = List("bloop", "about").!!.linesIterator
         .find(_.startsWith("bloop v"))
         .getOrElse("")
         .stripPrefix("bloop v")
+
       if (isOutdated(version)) {
         scribe.info(s"shutting down old version of Bloop '$version'")
         restartBloopServer()
       }
+    }.recover {
+      case e: Throwable => app.error(e.getLocalizedMessage)
     }
   }
 
