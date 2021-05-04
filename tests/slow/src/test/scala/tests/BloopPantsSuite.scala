@@ -51,6 +51,40 @@ class BloopPantsSuite extends FastpassSuite {
       .hasProjectsOnRuntimeClasspath(projects("core:core"))
   }
 
+  test("user supplied project name is not shortened") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/core/BUILD
+                                 |scala_library(
+                                 |  sources=['*.scala'],
+                                 |)
+                                 |/core/Lib.scala
+                                 |package core
+                                 |object Lib {
+                                 |  def greeting = "Hello from lib!"
+                                 |}
+                                 |/src/BUILD
+                                 |scala_library(
+                                 |  sources=['*.scala'],
+                                 |  dependencies=['core:core']
+                                 |)
+                                 |/src/Main.scala
+                                 |package src
+                                 |object Main extends App {
+                                 |  println(core.Lib.greeting)
+                                 |}
+                                 |""".stripMargin)
+
+    val veryLongName =
+      "This.is.a.very.very.long.project.name.that.contains.exactly.one.hundred.characters_12345678901234567"
+
+    workspace
+      .run("create" :: "--name" :: veryLongName :: "::" :: Nil)
+      .succeeds
+    val projects = workspace.projects()
+
+    assert(projects("-project-root").out.toString.contains(veryLongName))
+  }
+
   test("respects strict_deps") {
     val workspace = Workspace(s"""$pantsIni
                                  |/a/BUILD
