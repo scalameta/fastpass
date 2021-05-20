@@ -1,11 +1,11 @@
 lazy val V = new {
-  val scala212 = "2.12.11"
+  val scala212 = "2.12.13"
   val bloop = "1.4.8"
   val coursierInterfaces = "0.0.22"
   val scribe = "2.7.12"
   val ujson = "1.1.0"
   val metaconfig = "0.9.10"
-  val scalameta = "4.3.10"
+  val scalameta = "4.4.0"
   val bsp = "2.0.0-M4+10-61e61e87"
   val munit = "0.7.7"
 }
@@ -91,7 +91,7 @@ inThisBuild(
     semanticdbEnabled := true,
     semanticdbVersion := scalafixSemanticdb.revision,
     scalafixCaching := true,
-    scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.3.1-RC3"
+    scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.5.0"
   )
 )
 
