@@ -264,18 +264,18 @@ private class BloopPants(
   def workspace: Path = args.workspace
   def userTargets: List[String] = args.targets
 
-  private val scalaCompiler = "org.scala-lang:scala-compiler:"
+  private val scalaLibrary = "org.scala-lang:scala-library:"
   private val transitiveClasspath = new ju.HashMap[String, List[Path]]().asScala
   private val isVisited = mutable.Set.empty[String]
 
-  val compilerVersion: String = export.libraries.keysIterator
+  val scalaVersion: String = export.libraries.keysIterator
     .collectFirst {
-      case module if module.startsWith(scalaCompiler) =>
-        module.stripPrefix(scalaCompiler)
+      case module if module.startsWith(scalaLibrary) =>
+        module.stripPrefix(scalaLibrary)
     }
     .getOrElse {
       scribe.warn(
-        s"missing scala-compiler: falling back to ${Properties.versionNumberString}"
+        s"missing scala-library: falling back to ${Properties.versionNumberString}"
       )
       Properties.versionNumberString
     }
@@ -766,7 +766,7 @@ private class BloopPants(
       C.Scala(
         "org.scala-lang",
         "scala-compiler",
-        compilerVersion,
+        scalaVersion,
         scalacOptions,
         allScalaJars,
         None,
@@ -814,10 +814,9 @@ private class BloopPants(
     )
 
   private def isScalaJar(module: String): Boolean =
-    module.startsWith(scalaCompiler) ||
+    module.startsWith(scalaLibrary) ||
       module.startsWith("org.scala-lang:scala-reflect:") ||
-      module.startsWith("org.scala-lang:scala-library:") ||
-      module.startsWith("org.scala-lang:scala-library:") ||
+      module.startsWith("org.scala-lang:scala-compiler:") ||
       module.startsWith("org.fursesource:jansi:") ||
       module.startsWith("jline:jline:")
 
