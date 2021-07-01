@@ -20,7 +20,7 @@ jobs:
             artifact: fastpass-x86_64-pc-linux
     steps:
       - uses: actions/checkout@v2
-      - uses: olafurpg/setup-scala@v10
+      - uses: olafurpg/setup-scala@v12
         with:
           java-version: graalvm-ce-java11@20.1.0
       - run: git fetch --tags || true
