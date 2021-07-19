@@ -10,7 +10,7 @@ import scala.meta.io.AbsolutePath
 import ujson.Obj
 
 object BloopGlobalSettings {
-  def update(workspace: AbsolutePath, newHome: Option[Path]): Boolean = {
+  def update(newHome: Option[Path]): Boolean = {
     import scala.meta.internal.fastpass.FastpassEnrichments._
     val homedir = AbsolutePath(System.getProperty("user.home"))
     val file = homedir.resolve(".bloop").resolve("bloop.json")
