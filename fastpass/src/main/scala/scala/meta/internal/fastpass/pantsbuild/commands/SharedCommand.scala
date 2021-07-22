@@ -21,7 +21,7 @@ import scala.meta.internal.fastpass.pantsbuild.BloopPants
 import scala.meta.internal.fastpass.pantsbuild.Export
 import scala.meta.internal.fastpass.pantsbuild.IntelliJ
 import scala.meta.internal.fastpass.pantsbuild.MessageOnlyException
-import scala.meta.io.AbsolutePath
+import scala.meta.internal.fastpass.pantsbuild.PantsExportResult
 
 import bloop.bloopgun.core.Shell
 import bloop.launcher.LauncherMain
@@ -86,7 +86,7 @@ object SharedCommand {
           deleteSymlinkDirectories(export.project)
 
           if (export.export.canBloopExit) {
-            restartBloopIfNewSettings(AbsolutePath(workspace), export.app)
+            restartBloopIfNewSettings(export.app, exportResult)
           }
           if (export.open.isEmpty) {
             OpenCommand.onEmpty(export.project, export.app)
@@ -101,9 +101,14 @@ object SharedCommand {
     }
   }
 
-  def restartBloopIfNewSettings(workspace: AbsolutePath, app: CliApp): Unit = {
+  def restartBloopIfNewSettings(
+      app: CliApp,
+      exportResult: Option[PantsExportResult]
+  ): Unit = {
+    val javaHome = exportResult.flatMap(_.pantsExport.jvmDistribution.javaHome)
+    val usedJavaHome = if (javaHome.isDefined) javaHome else defaultJavaHomePath
     val isUpdatedBloopSettings =
-      BloopGlobalSettings.update(workspace, defaultJavaHomePath)
+      BloopGlobalSettings.update(usedJavaHome)
     if (isUpdatedBloopSettings) {
       restartBloopServer()
     } else {
