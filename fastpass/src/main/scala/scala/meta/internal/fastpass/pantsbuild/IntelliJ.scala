@@ -64,7 +64,7 @@ object IntelliJ {
   def writeBsp(
       project: Project,
       shared: SharedOptions,
-      coursierBinary: Option[Path] = None,
+      coursierBinary: Option[Path] = coursierFromEnv(),
       exportResult: Option[PantsExportResult] = None
   ): Unit = {
     SharedCommand.runScalafmtSymlink(project, shared)
@@ -191,4 +191,7 @@ object IntelliJ {
     }
     project.root.pantsLibrariesJson.writeText(ujson.write(libraries))
   }
+
+  private def coursierFromEnv(): Option[Path] =
+    sys.env.get("COURSIER_BINARY").map(Paths.get(_))
 }
