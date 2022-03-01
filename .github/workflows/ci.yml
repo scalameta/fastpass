@@ -28,7 +28,7 @@ jobs:
           java-version: "adopt@1.${{ matrix.java }}"
       - run: brew uninstall --ignore-dependencies python@3.9 python@3.8
         if: matrix.os == 'macOS-latest'
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v3
         with:
           python-version: '3.8'
       - run: pip install virtualenv
