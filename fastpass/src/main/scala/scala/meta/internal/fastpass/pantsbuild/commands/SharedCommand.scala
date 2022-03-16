@@ -1,12 +1,10 @@
 package scala.meta.internal.fastpass.pantsbuild.commands
 
-import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.Promise
 import scala.sys.process._
 import scala.util.Failure
 import scala.util.Success
@@ -23,8 +21,6 @@ import scala.meta.internal.fastpass.pantsbuild.IntelliJ
 import scala.meta.internal.fastpass.pantsbuild.MessageOnlyException
 import scala.meta.internal.fastpass.pantsbuild.PantsExportResult
 
-import bloop.bloopgun.core.Shell
-import bloop.launcher.LauncherMain
 import metaconfig.cli.CliApp
 import metaconfig.cli.TabCompletionContext
 import metaconfig.cli.TabCompletionItem
@@ -176,7 +172,7 @@ object SharedCommand {
       "1.4.0-RC1-235-3231567a", "1.4.0-RC1-190-ef7d8dba",
       "1.4.0-RC1-167-61fbbe08", "1.4.0-RC1-69-693de22a",
       "1.4.0-RC1+33-dfd03f53", "1.4.0-RC1", "1.4.1", "1.4.2", "1.4.3", "1.4.4",
-      "1.4.6"
+      "1.4.6", "1.4.8"
     )
     Try {
       val version = List("bloop", "about").!!.linesIterator
@@ -195,20 +191,11 @@ object SharedCommand {
 
   private def restartBloopServer(): Unit = {
     List("bloop", "exit").!
-    new LauncherMain(
-      clientIn = System.in,
-      clientOut = System.out,
-      out = System.out,
-      charset = StandardCharsets.UTF_8,
-      shell = Shell.default,
-      userNailgunHost = None,
-      userNailgunPort = None,
-      startedServer = Promise[Unit]()
-    ).runLauncher(
-      bloopVersionToInstall = BuildInfo.bloopVersion,
-      skipBspConnection = true,
-      serverJvmOptions = Nil
-    )
+    List(
+      "bloop",
+      "about",
+      s"--fallback-bloop-version=${BuildInfo.bloopVersion}"
+    ).!
   }
 
   private def defaultJavaHomePath: Option[Path] = {
