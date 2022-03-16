@@ -1,7 +1,7 @@
 lazy val V = new {
   val scala212 = "2.12.13"
-  val bloop = "1.4.8"
-  val coursierInterfaces = "0.0.22"
+  val bloop = "1.4.13"
+  val coursierInterfaces = "1.0.6"
   val scribe = "2.7.12"
   val ujson = "1.1.0"
   val metaconfig = "0.9.10"
@@ -133,7 +133,6 @@ lazy val fastpass = project
       "com.lihaoyi" %% "ujson" % V.ujson,
       "ch.epfl.scala" %% "bloop-frontend" % V.bloop,
       "ch.epfl.scala" %% "bloop-config" % V.bloop,
-      "ch.epfl.scala" %% "bloop-launcher" % V.bloop,
       "org.scalameta" %% "trees" % V.scalameta,
       "ch.epfl.scala" % "bsp4j" % V.bsp
     ),
@@ -171,7 +170,7 @@ lazy val fastpass = project
       assert(reflectionFile.exists, "no such file: " + reflectionFile)
       List(
         "--initialize-at-build-time",
-        "--initialize-at-run-time=scala.meta.internal.fastpass,metaconfig",
+        "--initialize-at-run-time=scala.meta.internal.fastpass,metaconfig,scala.util.Random,coursierapi.internal.jniutils.ApiInternalNativeApi",
         "--no-server",
         "--enable-http",
         "--enable-https",
