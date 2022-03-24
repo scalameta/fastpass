@@ -287,7 +287,7 @@ private class BloopPants(
       // automatically registers org.scalatest.junit.JUnitRunner and
       // org.scalatestplus.junit.JUnitRunner even if there is no `@RunWith`
       // annotation.
-      Dependency.of("org.scalameta", "junit-interface", "0.7.11")
+      Dependency.of("org.scalameta", "junit-interface", "1.0.0-M3")
     ).flatMap(fetchDependency)
 
   private val mutableJarsHome = workspace.resolve(".pants.d")
