@@ -1,4 +1,4 @@
-package scala.meta.internal.fastpass.pantsbuild.commands
+package scala.meta.internal.fastpass.generic
 
 import java.nio.file.Files
 
@@ -6,6 +6,7 @@ import scala.util.Try
 
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.pantsbuild.PantsConfiguration
+import scala.meta.internal.fastpass.pantsbuild.commands.StrictDepsMode
 import scala.meta.io.AbsolutePath
 
 import metaconfig.Conf
@@ -18,7 +19,8 @@ case class Project(
     targets: List[String],
     root: ProjectRoot,
     sources: SourcesMode,
-    strictDeps: StrictDepsMode
+    strictDeps: StrictDepsMode,
+    importMode: ImportMode
 ) {
   val fuzzyName: String = PantsConfiguration.outputFilename(name)
   def matchesName(query: String): Boolean =
@@ -33,7 +35,8 @@ object Project {
       common: SharedOptions,
       targets: List[String],
       sources: SourcesMode,
-      strictDeps: StrictDepsMode
+      strictDeps: StrictDepsMode,
+      importMode: ImportMode
   ): Project = {
     Project(
       common,
@@ -41,7 +44,8 @@ object Project {
       targets,
       ProjectRoot(common.home.resolve(name)),
       sources,
-      strictDeps
+      strictDeps,
+      importMode
     )
   }
   def names(common: SharedOptions): List[String] =
@@ -94,13 +98,20 @@ object Project {
         }
         .flatMap(c => StrictDepsMode.decoder.read(c).toEither.toOption)
         .getOrElse(StrictDepsMode.Default)
+      val importMode: ImportMode = json.obj
+        .get("importMode")
+        .collect {
+          case _ => ImportMode.Pants
+        }
+        .getOrElse(ImportMode.Pants)
       Project(
         common,
         project.filename,
         targets.arr.iterator.map(_.str).filter(_.nonEmpty).toList,
         root,
         sources,
-        strictDeps
+        strictDeps,
+        importMode
       )
     }
   }

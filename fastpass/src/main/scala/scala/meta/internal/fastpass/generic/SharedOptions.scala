@@ -1,4 +1,4 @@
-package scala.meta.internal.fastpass.pantsbuild.commands
+package scala.meta.internal.fastpass.generic
 
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -20,7 +20,7 @@ case class SharedOptions(
       "The path to the `pants` executable. " +
         "Defaults to the `pants` executable in the workspace directory."
     )
-    pants: Option[Path] = None
+    pants: Option[Path] = None,
 ) {
   def bloopDirectory: Path = workspace.resolve(".bloop")
   def pantsBinary: Path = pants.getOrElse(workspace.resolve("pants"))

@@ -1,9 +1,17 @@
-package scala.meta.internal.fastpass.pantsbuild.commands
+package scala.meta.internal.fastpass.generic
 
 import java.io.File
 
+import scala.util.Failure
+import scala.util.Success
+
 import scala.meta.internal.fastpass.FastpassEnrichments._
+import scala.meta.internal.fastpass.LogMessages
+import scala.meta.internal.fastpass.MessageOnlyException
+import scala.meta.internal.fastpass.Time
+import scala.meta.internal.fastpass.Timer
 import scala.meta.internal.fastpass.pantsbuild.Export
+import scala.meta.internal.fastpass.pantsbuild.commands.SharedPantsCommand
 import scala.meta.internal.io.PathIO
 import scala.meta.io.AbsolutePath
 
@@ -25,9 +33,8 @@ object CreateCommand extends Command[CreateOptions]("create") {
       Doc.line,
       List(
         "# Create project with custom name from two Pants targets",
-        "fastpass create --name PROJECT_NAME TARGETS1:: TARGETS2::",
-        "",
-        "# Create project with an auto-generated name and launch IntelliJ",
+        "fastpass create --name PROJECT_NAME TARGETS1:: TARGETS2::", "",
+        "", "# Create project with an auto-generated name and launch IntelliJ",
         "fastpass create --intellij TARGETS::"
       ).map(Doc.text)
     )
@@ -57,22 +64,75 @@ object CreateCommand extends Command[CreateOptions]("create") {
           1
 
       case None =>
+        val importMode = ImportMode.Pants
         val project = Project.create(
           name,
           create.common,
           create.targets,
           sources = create.export.sources.toNonDefault,
-          strictDeps = create.export.strictDeps.toNonDefault
+          strictDeps = create.export.strictDeps.toNonDefault,
+          importMode = importMode
         )
-        SharedCommand.interpretExport(
-          Export(project, create.open, app).copy(export = create.export)
-        )
+        val timer = new Timer(Time.system)
+        val installResult =
+          importMode match {
+            case ImportMode.Pants =>
+              SharedPantsCommand.interpretExport(
+                Export(project, create.open, app).copy(export = create.export)
+              )
+          }
+        installResult match {
+          case Failure(exception) =>
+            exception match {
+              case MessageOnlyException(message) =>
+                app.error(message)
+              case _ =>
+                app.error(s"fastpass failed to run")
+                exception.printStackTrace(app.out)
+            }
+            1
+          case Success(exportResult) =>
+            IntelliJ.writeBsp(
+              project,
+              create.common,
+              create.export.coursierBinary,
+              exportResult
+            )
+            exportResult.foreach { result =>
+              val targets =
+                LogMessages.pluralName("Pants target", result.exportedTargets)
+              app.info(
+                s"exported ${targets} to project '${project.name}' in $timer"
+              )
+            }
+            SwitchCommand.runSymlinkOrWarn(
+              project,
+              create.common,
+              app,
+              isStrict = false
+            )
+
+            if (create.export.canBloopExit) {
+              SharedCommand.restartBloopIfNewSettings(app, exportResult)
+            }
+            if (create.open.isEmpty) {
+              OpenCommand.onEmpty(project, app)
+            } else {
+              OpenCommand.run(
+                create.open
+                  .withProject(project)
+                  .withWorkspace(create.common.workspace),
+                app
+              )
+            }
+            0
+        }
     }
   }
 
   private def completeTargetSpec(
       context: TabCompletionContext,
-      cwd: AbsolutePath
+      cwd: AbsolutePath,
   ): List[TabCompletionItem] = {
     val path =
       context.last.split(File.separatorChar).foldLeft(cwd) {
@@ -92,7 +152,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
         name
           .toRelative(cwd)
           .toURI(isDirectory = false)
-          .toString() + "::"
+          .toString()
       )
       .map(name => TabCompletionItem(name))
       .toBuffer

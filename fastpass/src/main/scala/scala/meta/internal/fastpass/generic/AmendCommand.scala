@@ -1,4 +1,4 @@
-package scala.meta.internal.fastpass.pantsbuild.commands
+package scala.meta.internal.fastpass.generic
 
 import java.io.PrintWriter
 import java.nio.charset.StandardCharsets
@@ -7,8 +7,6 @@ import java.nio.file.Path
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
-
-import scala.meta.internal.fastpass.pantsbuild.IntelliJ
 
 import metaconfig.cli.CliApp
 import metaconfig.cli.Command
@@ -20,7 +18,7 @@ import org.typelevel.paiges.Doc
 object AmendCommand extends Command[AmendOptions]("amend") {
   override def description: Doc =
     Doc.paragraph(
-      "Edit the Pants targets of an existing project"
+      "Edit the targets of an existing project"
     )
   override def options: Doc = Messages.options(AmendOptions())
   override def complete(
@@ -131,7 +129,9 @@ object AmendCommand extends Command[AmendOptions]("amend") {
           "\n",
           "\n# Please add or remove targets from this list.\n" +
             "# When you're done, save the file and close the editor.\n" +
-            "# Lines starting with '#' will be ignored."
+            "# Lines starting with '#' will be ignored.\n" +
+            s"# This project is imported with ${project.importMode.name}.\n" +
+            "# To change the import mode, delete and re-create the project."
         )
         .getBytes(StandardCharsets.UTF_8)
     )

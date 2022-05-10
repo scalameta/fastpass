@@ -2,12 +2,13 @@ package scala.meta.internal.fastpass.pantsbuild
 
 import java.util.concurrent.TimeUnit
 
-import scala.meta.internal.fastpass.pantsbuild.commands.ExportOptions
-import scala.meta.internal.fastpass.pantsbuild.commands.OpenOptions
-import scala.meta.internal.fastpass.pantsbuild.commands.Project
-import scala.meta.internal.fastpass.pantsbuild.commands.ProjectRoot
-import scala.meta.internal.fastpass.pantsbuild.commands.SharedOptions
-import scala.meta.internal.fastpass.pantsbuild.commands.SourcesMode
+import scala.meta.internal.fastpass.generic.ExportOptions
+import scala.meta.internal.fastpass.generic.ImportMode
+import scala.meta.internal.fastpass.generic.OpenOptions
+import scala.meta.internal.fastpass.generic.Project
+import scala.meta.internal.fastpass.generic.ProjectRoot
+import scala.meta.internal.fastpass.generic.SharedOptions
+import scala.meta.internal.fastpass.generic.SourcesMode
 import scala.meta.internal.fastpass.pantsbuild.commands.StrictDepsMode
 import scala.meta.io.AbsolutePath
 
@@ -26,7 +27,8 @@ private object BloopPantsBenchmark {
         Nil,
         root,
         SourcesMode.Default,
-        StrictDepsMode.Default
+        StrictDepsMode.Default,
+        ImportMode.Pants
       )
       val app = CliApp("", "", Nil)
       val export = Export(project, OpenOptions(), app, export = ExportOptions())

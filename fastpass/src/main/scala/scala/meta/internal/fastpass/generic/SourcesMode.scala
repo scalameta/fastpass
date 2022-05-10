@@ -1,4 +1,4 @@
-package scala.meta.internal.fastpass.pantsbuild.commands
+package scala.meta.internal.fastpass.generic
 
 import metaconfig.Conf
 import metaconfig.Configured

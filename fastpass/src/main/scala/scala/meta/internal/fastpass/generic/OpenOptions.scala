@@ -1,9 +1,6 @@
-package scala.meta.internal.fastpass.pantsbuild.commands
+package scala.meta.internal.fastpass.generic
 
 import java.nio.file.Path
-
-import scala.meta.internal.fastpass.pantsbuild.IntelliJ
-import scala.meta.internal.fastpass.pantsbuild.VSCode
 
 import metaconfig.ConfDecoder
 import metaconfig.ConfEncoder

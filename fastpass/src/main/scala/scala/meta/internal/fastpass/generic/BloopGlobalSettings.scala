@@ -1,4 +1,4 @@
-package scala.meta.internal.fastpass.pantsbuild.commands
+package scala.meta.internal.fastpass.generic
 
 import java.nio.file.Path
 import java.nio.file.Paths

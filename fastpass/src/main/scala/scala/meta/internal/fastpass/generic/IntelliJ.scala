@@ -1,4 +1,4 @@
-package scala.meta.internal.fastpass.pantsbuild
+package scala.meta.internal.fastpass.generic
 
 import java.net.URL
 import java.nio.charset.StandardCharsets
@@ -11,11 +11,7 @@ import scala.sys.process._
 
 import scala.meta.fastpass.Fastpass
 import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.meta.internal.fastpass.pantsbuild.commands.OpenOptions
-import scala.meta.internal.fastpass.pantsbuild.commands.Project
-import scala.meta.internal.fastpass.pantsbuild.commands.RefreshCommand
-import scala.meta.internal.fastpass.pantsbuild.commands.SharedCommand
-import scala.meta.internal.fastpass.pantsbuild.commands.SharedOptions
+import scala.meta.internal.fastpass.pantsbuild.PantsExportResult
 import scala.meta.internal.fastpass.zipkin.Property
 import scala.meta.internal.fastpass.zipkin.ZipkinProperties
 import scala.meta.internal.fastpass.{BuildInfo => V}
@@ -96,6 +92,7 @@ object IntelliJ {
     )
     newJson("sources") = project.sources.toNonDefault.toString
     newJson("strictDeps") = project.strictDeps.toNonDefault.toString
+    newJson("importMode") = project.importMode.name
     newJson("pantsTargets") = project.targets
     newJson("fastpassVersion") = V.fastpassVersion
     newJson("fastpassProjectName") = project.name
@@ -177,7 +174,7 @@ object IntelliJ {
       export: PantsExportResult
   ): Unit = {
     val libraries = Obj()
-    export.pantsExport.libraries.valuesIterator.foreach { obj =>
+    export.libraries.foreach { obj =>
       for {
         default <- obj.default
         sources <- obj.sources

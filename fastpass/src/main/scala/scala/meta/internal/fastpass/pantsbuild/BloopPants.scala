@@ -24,11 +24,9 @@ import scala.util.control.NonFatal
 
 import scala.meta.internal.fastpass.BuildInfo
 import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.meta.internal.fastpass.FastpassLogger
 import scala.meta.internal.fastpass.InterruptException
 import scala.meta.internal.fastpass.MD5
 import scala.meta.internal.fastpass.SystemProcess
-import scala.meta.internal.fastpass.pantsbuild.commands._
 import scala.meta.internal.io.FileIO
 import scala.meta.io.AbsolutePath
 import scala.meta.io.Classpath
@@ -37,39 +35,10 @@ import bloop.config.Tag
 import bloop.config.{Config => C}
 import coursierapi.Dependency
 import coursierapi.MavenRepository
-import metaconfig.cli.CliApp
-import metaconfig.cli.HelpCommand
-import metaconfig.cli.TabCompleteCommand
-import metaconfig.cli.VersionCommand
 import org.eclipse.lsp4j.jsonrpc.CancelChecker
 import ujson.Value
 
 object BloopPants {
-  lazy val app: CliApp = CliApp(
-    version = BuildInfo.fastpassVersion,
-    binaryName = "fastpass",
-    commands = List(
-      HelpCommand,
-      VersionCommand,
-      CurrentCommand,
-      CreateCommand,
-      RefreshCommand,
-      ListCommand,
-      InfoCommand,
-      OpenCommand,
-      SwitchCommand,
-      AmendCommand,
-      RemoveCommand,
-      TabCompleteCommand
-    )
-  )
-
-  def main(args: Array[String]): Unit = {
-    FastpassLogger.updateDefaultFormat()
-    val exit = app.run(args.toList)
-    System.exit(exit)
-  }
-
   def pantsOwnerOf(
       workspace: AbsolutePath,
       source: AbsolutePath
@@ -359,7 +328,12 @@ private class BloopPants(
     }
     cleanStaleBloopFiles(generatedProjects)
     token.checkCanceled()
-    new PantsExportResult(generatedProjects.size, internalSources, export)
+    new PantsExportResult(
+      generatedProjects.size,
+      internalSources,
+      export.jvmDistribution.javaHome,
+      export.libraries.valuesIterator
+    )
   }
 
   val intervals = 20

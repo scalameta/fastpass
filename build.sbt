@@ -1,6 +1,6 @@
 lazy val V = new {
-  val scala212 = "2.12.13"
-  val bloop = "1.4.13"
+  val scala212 = "2.12.15"
+  val bloop = "1.5.0"
   val coursierInterfaces = "1.0.6"
   val scribe = "2.7.12"
   val ujson = "1.1.0"
@@ -20,11 +20,11 @@ val pantsTestWorkspaceRoot =
 
 lazy val testSettings: Seq[Def.Setting[_]] = List(
   Test / parallelExecution := false,
-  skip.in(publish) := true,
+  publish / skip := true,
   fork := true,
   libraryDependencies += "org.scalameta" %% "munit" % V.munit,
   testFrameworks := List(MUnitFramework),
-  testOptions.in(Test) ++= {
+  Test / testOptions ++= {
     if (insideCI.value) {
       // Enable verbose logging using sbt loggers in CI.
       List(Tests.Argument(MUnitFramework, "+l", "--verbose"))
@@ -34,7 +34,7 @@ lazy val testSettings: Seq[Def.Setting[_]] = List(
   }
 )
 
-onLoad.in(Global) ~= { old =>
+Global / onLoad ~= { old =>
   if (!scala.util.Properties.isWin) {
     import java.nio.file._
     val prePush = Paths.get(".git", "hooks", "pre-push")
@@ -95,7 +95,7 @@ inThisBuild(
   )
 )
 
-skip in publish := true
+publish / skip := true
 crossScalaVersions := Nil
 
 addCommandAlias(
@@ -144,10 +144,10 @@ lazy val fastpass = project
       "bloopNightlyVersion" -> V.bloop,
       "scala212" -> V.scala212
     ),
-    mainClass.in(Compile) := Some(
+    Compile / mainClass := Some(
       "scala.meta.fastpass.Fastpass"
     ),
-    mainClass.in(GraalVMNativeImage) := Some(
+    GraalVMNativeImage / mainClass := Some(
       "scala.meta.fastpass.Fastpass"
     ),
     graalVMNativeImageCommand ~= { old =>
@@ -166,7 +166,7 @@ lazy val fastpass = project
     },
     graalVMNativeImageOptions ++= {
       val reflectionFile =
-        Keys.sourceDirectory.in(Compile).value./("graal")./("reflection.json")
+        (Compile / sourceDirectory).value / "graal" / "reflection.json"
       assert(reflectionFile.exists, "no such file: " + reflectionFile)
       List(
         "--initialize-at-build-time",
@@ -214,5 +214,5 @@ lazy val benchmarks = project
   .enablePlugins(JmhPlugin)
   .dependsOn(fastpass)
   .settings(
-    skip in publish := true
+    publish / skip := true
   )

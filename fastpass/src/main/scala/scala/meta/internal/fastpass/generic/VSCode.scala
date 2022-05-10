@@ -1,10 +1,10 @@
-package scala.meta.internal.fastpass.pantsbuild
+package scala.meta.internal.fastpass.generic
 
 import scala.sys.process._
 import scala.util.control.NonFatal
 
 import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.meta.internal.fastpass.pantsbuild.commands.Project
+import scala.meta.internal.fastpass.pantsbuild.PantsConfiguration
 import scala.meta.io.AbsolutePath
 
 object VSCode {

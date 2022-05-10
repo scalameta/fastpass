@@ -1,6 +1,10 @@
-package scala.meta.internal.fastpass.pantsbuild.commands
+package scala.meta.internal.fastpass.generic
 
-import scala.meta.internal.fastpass.pantsbuild.Export
+import scala.util.Failure
+import scala.util.Try
+
+import scala.meta.internal.fastpass.MessageOnlyException
+import scala.meta.internal.fastpass.pantsbuild.commands.PantsRefresh
 
 import metaconfig.cli.CliApp
 import metaconfig.cli.Command
@@ -25,32 +29,26 @@ object RefreshCommand extends Command[RefreshOptions]("refresh") {
   ): List[TabCompletionItem] =
     SharedCommand.complete(context, allowsMultipleProjects = true)
   def run(refresh: RefreshOptions, app: CliApp): Int = {
-    val projects = Project.fromCommon(refresh.common)
-    val errors = refresh.projects.map { projectName =>
-      projects.find(_.matchesName(projectName)) match {
-        case Some(project) =>
-          SharedCommand.interpretExport(
-            Export(
-              project.copy(
-                sources = refresh.export.sources
-                  .toNonDefaultWithFallback(project.sources),
-                strictDeps = refresh.export.strictDeps
-                  .toNonDefaultWithFallback(project.strictDeps)
-              ),
-              refresh.open,
-              app
-            ).copy(
-              export = refresh.export.copy(
-                sources = refresh.export.sources,
-                strictDeps = refresh.export.strictDeps
-              ),
-              isCache = refresh.update
-            )
-          )
+    val existingProjects = Project.fromCommon(refresh.common)
+    refresh.projects.map { projectName =>
+      existingProjects.find(_.matchesName(projectName)) match {
         case None =>
           SharedCommand.noSuchProject(projectName, app, refresh.common)
+        case Some(project) if project.importMode == ImportMode.Pants =>
+          reportFailure(app, PantsRefresh.run(refresh, project, app))
       }
-    }
-    errors.sum
+    }.sum
   }
+
+  private def reportFailure[T](app: CliApp, op: Try[T]): Int =
+    op match {
+      case Failure(MessageOnlyException(msg)) =>
+        ???
+        1
+      case Failure(other) =>
+        ???
+        1
+      case _ =>
+        0
+    }
 }

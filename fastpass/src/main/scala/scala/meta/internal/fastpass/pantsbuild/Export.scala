@@ -2,10 +2,10 @@ package scala.meta.internal.fastpass.pantsbuild
 
 import java.nio.file.Path
 
-import scala.meta.internal.fastpass.pantsbuild.commands.ExportOptions
-import scala.meta.internal.fastpass.pantsbuild.commands.OpenOptions
-import scala.meta.internal.fastpass.pantsbuild.commands.Project
-import scala.meta.internal.fastpass.pantsbuild.commands.SourcesMode
+import scala.meta.internal.fastpass.generic.ExportOptions
+import scala.meta.internal.fastpass.generic.OpenOptions
+import scala.meta.internal.fastpass.generic.Project
+import scala.meta.internal.fastpass.generic.SourcesMode
 import scala.meta.internal.fastpass.pantsbuild.commands.StrictDepsMode
 import scala.meta.io.AbsolutePath
 

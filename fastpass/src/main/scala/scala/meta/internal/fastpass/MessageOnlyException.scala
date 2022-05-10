@@ -1,4 +1,4 @@
-package scala.meta.internal.fastpass.pantsbuild
+package scala.meta.internal.fastpass
 
 import scala.util.control.NoStackTrace
 
