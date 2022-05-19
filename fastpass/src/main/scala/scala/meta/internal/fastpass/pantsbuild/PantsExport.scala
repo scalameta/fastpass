@@ -8,6 +8,7 @@ import java.{util => ju}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
+import scala.meta.internal.fastpass.IO
 import scala.meta.io.AbsolutePath
 
 import ujson.Bool
@@ -101,7 +102,7 @@ object PantsExport {
           TargetType(value(PantsKeys.targetType).str)
         }
       val id = value(PantsKeys.id).str
-      val directoryName = BloopPants.makeClassesDirFilename(id)
+      val directoryName = IO.makeClassesDirFilename(id)
       val classesDir: Path = Files.createDirectories(
         args.bloopDir.resolve(directoryName).resolve("classes")
       )
