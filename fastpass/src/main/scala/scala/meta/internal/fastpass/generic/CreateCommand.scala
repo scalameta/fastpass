@@ -10,6 +10,7 @@ import scala.meta.internal.fastpass.LogMessages
 import scala.meta.internal.fastpass.MessageOnlyException
 import scala.meta.internal.fastpass.Time
 import scala.meta.internal.fastpass.Timer
+import scala.meta.internal.fastpass.bazelbuild.BloopBazel
 import scala.meta.internal.fastpass.pantsbuild.Export
 import scala.meta.internal.fastpass.pantsbuild.commands.SharedPantsCommand
 import scala.meta.internal.io.PathIO
@@ -34,6 +35,8 @@ object CreateCommand extends Command[CreateOptions]("create") {
       List(
         "# Create project with custom name from two Pants targets",
         "fastpass create --name PROJECT_NAME TARGETS1:: TARGETS2::", "",
+        "# Create project with an auto-generated name with Bazel",
+        "fastpass create --bazel --name PROJECT_NAME TARGETS1/... TARGETS2/...",
         "", "# Create project with an auto-generated name and launch IntelliJ",
         "fastpass create --intellij TARGETS::"
       ).map(Doc.text)
@@ -41,9 +44,10 @@ object CreateCommand extends Command[CreateOptions]("create") {
   override def complete(
       context: TabCompletionContext
   ): List[TabCompletionItem] = {
+    val isBazel = context.arguments.contains("--bazel")
     context.setting match {
       case None =>
-        completeTargetSpec(context, PathIO.workingDirectory)
+        completeTargetSpec(context, PathIO.workingDirectory, isBazel)
       case _ =>
         Nil
     }
@@ -64,7 +68,8 @@ object CreateCommand extends Command[CreateOptions]("create") {
           1
 
       case None =>
-        val importMode = ImportMode.Pants
+        val importMode =
+          if (create.bazel) ImportMode.Bazel else ImportMode.Pants
         val project = Project.create(
           name,
           create.common,
@@ -79,6 +84,14 @@ object CreateCommand extends Command[CreateOptions]("create") {
             case ImportMode.Pants =>
               SharedPantsCommand.interpretExport(
                 Export(project, create.open, app).copy(export = create.export)
+              )
+            case ImportMode.Bazel =>
+              BloopBazel.run(
+                project,
+                create.common.workspace,
+                create.common.bazelBinary,
+                create.open.intellij,
+                app
               )
           }
         installResult match {
@@ -100,7 +113,10 @@ object CreateCommand extends Command[CreateOptions]("create") {
             )
             exportResult.foreach { result =>
               val targets =
-                LogMessages.pluralName("Pants target", result.exportedTargets)
+                LogMessages.pluralName(
+                  s"${importMode} target",
+                  result.exportedTargets
+                )
               app.info(
                 s"exported ${targets} to project '${project.name}' in $timer"
               )
@@ -133,7 +149,9 @@ object CreateCommand extends Command[CreateOptions]("create") {
   private def completeTargetSpec(
       context: TabCompletionContext,
       cwd: AbsolutePath,
+      isBazel: Boolean
   ): List[TabCompletionItem] = {
+    val suffix = if (isBazel) "/..." else "::"
     val path =
       context.last.split(File.separatorChar).foldLeft(cwd) {
         case (dir, "") => dir
@@ -152,7 +170,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
         name
           .toRelative(cwd)
           .toURI(isDirectory = false)
-          .toString()
+          .toString() + suffix
       )
       .map(name => TabCompletionItem(name))
       .toBuffer

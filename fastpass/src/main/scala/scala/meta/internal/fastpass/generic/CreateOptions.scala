@@ -20,6 +20,10 @@ case class CreateOptions(
         "Defaults to an auto-generated name based on the --targets option."
     )
     name: Option[String] = None,
+    @Description(
+      "Whether to use Bazel for project import. Defaults to false."
+    )
+    bazel: Boolean = false,
     @Hidden() @Inline export: ExportOptions = ExportOptions.default,
     @Hidden() @Inline open: OpenOptions = OpenOptions.default,
     @Hidden() @Inline common: SharedOptions = SharedOptions.default

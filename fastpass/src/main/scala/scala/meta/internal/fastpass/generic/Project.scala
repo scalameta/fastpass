@@ -101,6 +101,7 @@ object Project {
       val importMode: ImportMode = json.obj
         .get("importMode")
         .collect {
+          case Str(ImportMode.Bazel.name) => ImportMode.Bazel
           case _ => ImportMode.Pants
         }
         .getOrElse(ImportMode.Pants)

@@ -82,7 +82,7 @@ object SwitchCommand extends Command[SwitchOptions]("switch") {
         AbsolutePath(Files.readSymbolicLink(common.bloopDirectory)).list
           .exists(_.filename != "bloop.settings.json")
     if (isBuildExported) {
-      ", to see the list of exported Pants targets run: bloop projects"
+      ", to see the list of exported targets run: bloop projects"
     } else {
       ""
     }
