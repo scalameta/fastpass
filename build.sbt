@@ -120,7 +120,7 @@ commands += Command.command("taskready") { s =>
 
 lazy val fastpass = project
   .in(file("fastpass"))
-  .enablePlugins(BuildInfoPlugin, GraalVMNativeImagePlugin)
+  .enablePlugins(BuildInfoPlugin, GraalVMNativeImagePlugin, ProtobufPlugin)
   .settings(
     organization := "org.scalameta",
     name := "fastpass",
