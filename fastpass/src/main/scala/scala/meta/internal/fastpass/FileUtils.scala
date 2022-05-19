@@ -8,7 +8,7 @@ import java.nio.file.Path
 
 import scala.annotation.switch
 
-object IO {
+object FileUtils {
   def withTempFile[T](op: Path => T): T = {
     val file = Files.createTempFile("fastpass", null)
     try op(file)
@@ -23,7 +23,7 @@ object IO {
     }
   }
 
-  def toFileName(
+  def sanitizeFileName(
       name: String,
       suffix: String = "",
       maxLength: Int = 255

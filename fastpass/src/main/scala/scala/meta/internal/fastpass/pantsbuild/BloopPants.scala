@@ -23,7 +23,7 @@ import scala.util.control.NonFatal
 
 import scala.meta.internal.fastpass.BuildInfo
 import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.meta.internal.fastpass.IO
+import scala.meta.internal.fastpass.FileUtils
 import scala.meta.internal.fastpass.InterruptException
 import scala.meta.internal.fastpass.SystemProcess
 import scala.meta.internal.fastpass.generic.DependencyResolution
@@ -280,7 +280,7 @@ private class BloopPants(
     allProjects.foreach { project =>
       val finalProject = project
       val id = export.targets.get(finalProject.name).fold(project.name)(_.id)
-      val out = bloopDir.resolve(IO.makeJsonFilename(id))
+      val out = bloopDir.resolve(FileUtils.makeJsonFilename(id))
       val json = C.File(BuildInfo.bloopVersion, finalProject)
       bloop.config.write(json, out)
       generatedProjects += out
@@ -586,7 +586,7 @@ private class BloopPants(
   // Returns a Bloop project that has no source code. This project only exists
   // to control for example how the project view is displayed in IntelliJ.
   private def toEmptyBloopProject(name: String, directory: Path): C.Project = {
-    val directoryName = IO.makeClassesDirFilename(name)
+    val directoryName = FileUtils.makeClassesDirFilename(name)
     val classesDir: Path = Files.createDirectories(
       bloopDir.resolve(directoryName).resolve("classes")
     )
@@ -651,7 +651,7 @@ private class BloopPants(
     val fromCache = toCopyBuffer.get(path)
     if (fromCache != null) fromCache
     else {
-      val filename = IO.makeReadableFilename(library.name) + ".jar"
+      val filename = FileUtils.makeReadableFilename(library.name) + ".jar"
       toImmutableJar(filename, path)
     }
   }

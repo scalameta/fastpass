@@ -11,7 +11,7 @@ import scala.sys.process.Process
 import scala.sys.process.ProcessIO
 import scala.util.Try
 
-import scala.meta.internal.fastpass.IO
+import scala.meta.internal.fastpass.FileUtils
 import scala.meta.internal.fastpass.MessageOnlyException
 import scala.meta.internal.fastpass.bazelbuild.AnalysisProtosV2.ActionGraphContainer
 import scala.meta.internal.fastpass.bazelbuild.Build.QueryResult
@@ -83,7 +83,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
             err
           )
         } else {
-          IO.withTempFile { tmp =>
+          FileUtils.withTempFile { tmp =>
             val bytes = targets.mkString(System.lineSeparator).getBytes("UTF-8")
             Files.write(tmp, bytes)
             run(
@@ -236,9 +236,10 @@ class Bazel(bazelPath: Path, cwd: Path) {
   def run(
       cmd: List[String],
       out: OutputStream,
-      err: OutputStream = IO.NullOutputStream
+      err: OutputStream = FileUtils.NullOutputStream
   ): Int = {
-    val io = new ProcessIO(_ => (), IO.copy(_, out), IO.copy(_, err))
+    val io =
+      new ProcessIO(_ => (), FileUtils.copy(_, out), FileUtils.copy(_, err))
     Process(cmd, cwd.toFile)
       .run(io)
       .exitValue()

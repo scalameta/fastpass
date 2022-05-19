@@ -9,7 +9,7 @@ import scala.collection.mutable
 import scala.util.Success
 import scala.util.Try
 
-import scala.meta.internal.fastpass.IO
+import scala.meta.internal.fastpass.FileUtils
 import scala.meta.internal.fastpass.bazelbuild.AnalysisProtosV2.Artifact
 import scala.meta.internal.fastpass.bazelbuild.Build.Attribute
 import scala.meta.internal.fastpass.bazelbuild.Build.Target
@@ -195,7 +195,7 @@ object BloopBazel {
       project: Project,
       target: Target
   ): AbsolutePath = {
-    val dirName = IO.toFileName(bloopName(target))
+    val dirName = FileUtils.sanitizeFileName(bloopName(target))
     val dir = project.bspRoot.resolve("out").resolve(dirName)
     Files.createDirectories(dir.toNIO)
     dir
@@ -274,7 +274,7 @@ private class BloopBazel(
     ) { target =>
       val project = bloopProject(target)
       val file = Config.File("1.5.0", project)
-      val out = bloopDir.resolve(IO.makeJsonFilename(project.name))
+      val out = bloopDir.resolve(FileUtils.makeJsonFilename(project.name))
       bloop.config.write(file, out)
     }
 
