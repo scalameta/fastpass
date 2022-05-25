@@ -11,7 +11,6 @@ import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 import java.{util => ju}
 
-import scala.annotation.switch
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
@@ -24,52 +23,20 @@ import scala.util.control.NonFatal
 
 import scala.meta.internal.fastpass.BuildInfo
 import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.meta.internal.fastpass.FastpassLogger
+import scala.meta.internal.fastpass.FileUtils
 import scala.meta.internal.fastpass.InterruptException
-import scala.meta.internal.fastpass.MD5
 import scala.meta.internal.fastpass.SystemProcess
-import scala.meta.internal.fastpass.pantsbuild.commands._
+import scala.meta.internal.fastpass.generic.DependencyResolution
 import scala.meta.internal.io.FileIO
 import scala.meta.io.AbsolutePath
 import scala.meta.io.Classpath
 
 import bloop.config.Tag
 import bloop.config.{Config => C}
-import coursierapi.Dependency
-import coursierapi.MavenRepository
-import metaconfig.cli.CliApp
-import metaconfig.cli.HelpCommand
-import metaconfig.cli.TabCompleteCommand
-import metaconfig.cli.VersionCommand
 import org.eclipse.lsp4j.jsonrpc.CancelChecker
 import ujson.Value
 
 object BloopPants {
-  lazy val app: CliApp = CliApp(
-    version = BuildInfo.fastpassVersion,
-    binaryName = "fastpass",
-    commands = List(
-      HelpCommand,
-      VersionCommand,
-      CurrentCommand,
-      CreateCommand,
-      RefreshCommand,
-      ListCommand,
-      InfoCommand,
-      OpenCommand,
-      SwitchCommand,
-      AmendCommand,
-      RemoveCommand,
-      TabCompleteCommand
-    )
-  )
-
-  def main(args: Array[String]): Unit = {
-    FastpassLogger.updateDefaultFormat()
-    val exit = app.run(args.toList)
-    System.exit(exit)
-  }
-
   def pantsOwnerOf(
       workspace: AbsolutePath,
       source: AbsolutePath
@@ -201,35 +168,6 @@ object BloopPants {
     }
   }
 
-  def makeReadableFilename(target: String): String = {
-    val out = new java.lang.StringBuilder(target.length())
-    var i = 0
-    while (i < target.length()) {
-      val ch = (target.charAt(i): @switch) match {
-        case '.' => '.'
-        case '_' => '_'
-        case ch =>
-          if (Character.isAlphabetic(ch)) ch
-          else if (Character.isDigit(ch)) ch
-          else '-'
-      }
-      out.append(ch)
-      i += 1
-    }
-    out.toString()
-  }
-  def makeJsonFilename(target: String): String = {
-    makeReadableFilename(target) + ".json"
-  }
-  def makeJarFilename(target: String): String = {
-    makeReadableFilename(target) + ".jar"
-  }
-  def makeClassesDirFilename(target: String): String = {
-    // Prepend "z_" to separate it from the JSON files when listing the
-    // `.bloop/` directory.
-    "z_" + MD5.compute(target).take(12)
-  }
-
   private val sourceRootPattern = FileSystems.getDefault.getPathMatcher(
     "glob:**/{main,test,tests,src,3rdparty,3rd_party,thirdparty,third_party}/{resources,scala,java,jvm,proto,python,protobuf,py}"
   )
@@ -279,16 +217,6 @@ private class BloopPants(
       )
       Properties.versionNumberString
     }
-  lazy val testingFrameworkJars: List[Path] =
-    List(
-      // NOTE(olafur) This is a fork of the official sbt JUnit testing interface
-      // https://github.com/scalameta/munit/tree/master/junit-interface that
-      // reproduces the JUnit test runner in Pants. Most importantly, it
-      // automatically registers org.scalatest.junit.JUnitRunner and
-      // org.scalatestplus.junit.JUnitRunner even if there is no `@RunWith`
-      // annotation.
-      Dependency.of("org.scalameta", "junit-interface", "1.0.0-M3")
-    ).flatMap(fetchDependency)
 
   private val mutableJarsHome = workspace.resolve(".pants.d")
   private val bloopJars =
@@ -352,14 +280,19 @@ private class BloopPants(
     allProjects.foreach { project =>
       val finalProject = project
       val id = export.targets.get(finalProject.name).fold(project.name)(_.id)
-      val out = bloopDir.resolve(BloopPants.makeJsonFilename(id))
+      val out = bloopDir.resolve(FileUtils.makeJsonFilename(id))
       val json = C.File(BuildInfo.bloopVersion, finalProject)
       bloop.config.write(json, out)
       generatedProjects += out
     }
     cleanStaleBloopFiles(generatedProjects)
     token.checkCanceled()
-    new PantsExportResult(generatedProjects.size, internalSources, export)
+    new PantsExportResult(
+      generatedProjects.size,
+      internalSources,
+      export.jvmDistribution.javaHome,
+      export.libraries.valuesIterator
+    )
   }
 
   val intervals = 20
@@ -442,7 +375,9 @@ private class BloopPants(
 
     classpathEntries.addAll(allScalaJars.asJava)
     if (target.targetType.isTest) {
-      classpathEntries.addAll(testingFrameworkJars.asJava)
+      classpathEntries.addAll(
+        DependencyResolution.testingFrameworkJars.getOrElse(Nil).asJava
+      )
     }
     classpathEntries.iterator.asScala.toList
   }
@@ -464,7 +399,7 @@ private class BloopPants(
           close = true
         ) { root =>
           val sourceRoot = AbsolutePath(workspace).resolve(targetBase)
-          val jars = new SourcesJarBuilder(export, root.toNIO)
+          val jars = new SourcesJarBuilder(root.toNIO)
           jars.writeSourceRoot(sourceRoot.toRelative(AbsolutePath(workspace)))
           getSources(target)
             .foreach(dir => jars.expandDirectory(AbsolutePath(dir), sourceRoot))
@@ -651,7 +586,7 @@ private class BloopPants(
   // Returns a Bloop project that has no source code. This project only exists
   // to control for example how the project view is displayed in IntelliJ.
   private def toEmptyBloopProject(name: String, directory: Path): C.Project = {
-    val directoryName = BloopPants.makeClassesDirFilename(name)
+    val directoryName = FileUtils.makeClassesDirFilename(name)
     val classesDir: Path = Files.createDirectories(
       bloopDir.resolve(directoryName).resolve("classes")
     )
@@ -716,7 +651,7 @@ private class BloopPants(
     val fromCache = toCopyBuffer.get(path)
     if (fromCache != null) fromCache
     else {
-      val filename = BloopPants.makeReadableFilename(library.name) + ".jar"
+      val filename = FileUtils.makeReadableFilename(library.name) + ".jar"
       toImmutableJar(filename, path)
     }
   }
@@ -834,26 +769,5 @@ private class BloopPants(
       }
       .foreach { path => Files.deleteIfExists(path.toNIO) }
   }
-
-  // See https://github.com/scalatest/scalatest/pull/1739
-  private def fetchDependency(dep: Dependency): List[Path] =
-    try {
-      coursierapi.Fetch
-        .create()
-        .withDependencies(dep)
-        .addRepositories(
-          MavenRepository.of(
-            "https://oss.sonatype.org/content/repositories/public"
-          )
-        )
-        .fetch()
-        .asScala
-        .map(_.toPath())
-        .toList
-    } catch {
-      case NonFatal(e) =>
-        scribe.warn(s"Couldn't resolve dependency `$dep`", e)
-        Nil
-    }
 
 }

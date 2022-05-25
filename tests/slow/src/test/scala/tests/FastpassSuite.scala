@@ -12,8 +12,8 @@ import java.nio.file.attribute.BasicFileAttributes
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
+import scala.meta.fastpass.Fastpass
 import scala.meta.internal.fastpass.SystemProcess
-import scala.meta.internal.fastpass.pantsbuild.BloopPants
 import scala.meta.io.AbsolutePath
 
 import bloop.config.Config
@@ -28,7 +28,7 @@ trait FastpassSuite extends munit.FunSuite with BloopAssertions {
     def run(command: List[String]): Captured = {
       val outStream = new ByteArrayOutputStream
       val errStream = new ByteArrayOutputStream
-      val app = BloopPants.app.copy(
+      val app = Fastpass.app.copy(
         out = new PrintStream(outStream),
         err = new PrintStream(errStream),
         workingDirectory = root.toNIO

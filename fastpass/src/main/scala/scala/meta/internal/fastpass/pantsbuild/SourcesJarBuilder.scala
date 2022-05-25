@@ -21,7 +21,7 @@ import scala.meta.io.RelativePath
 import bloop.config.Config.SourcesGlobs
 
 /** Helper class to generate `*-sources.jar` files. */
-class SourcesJarBuilder(export: PantsExport, root: Path) {
+class SourcesJarBuilder(root: Path) {
   def writeSourceRoot(sourceRoot: RelativePath): Unit =
     try {
       val out =

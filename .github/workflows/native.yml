@@ -23,6 +23,10 @@ jobs:
       - uses: olafurpg/setup-scala@v10
         with:
           java-version: graalvm-ce-java11@20.1.0
+      - uses: arduino/setup-protoc@v1
+        with:
+          version: '3.9.1'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: git fetch --tags || true
       - run: gu install native-image
       - run: sbt native-image

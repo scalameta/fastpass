@@ -8,8 +8,6 @@ import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.sys.process._
 
-import scala.meta.internal.fastpass.pantsbuild.MessageOnlyException
-
 import org.eclipse.lsp4j.jsonrpc.CancelChecker
 
 object SystemProcess {

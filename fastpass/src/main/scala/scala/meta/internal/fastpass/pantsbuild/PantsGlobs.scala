@@ -50,6 +50,7 @@ case class PantsGlobs(
 }
 
 object PantsGlobs {
+  val empty: PantsGlobs = PantsGlobs(Nil, Nil)
   def fromJson(target: Value): PantsGlobs = {
     target.obj.get("globs") match {
       case Some(obj: Obj) =>
