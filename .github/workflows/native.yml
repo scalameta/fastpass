@@ -20,7 +20,7 @@ jobs:
             artifact: fastpass-x86_64-pc-linux
     steps:
       - uses: actions/checkout@v3
-      - uses: olafurpg/setup-scala@v10
+      - uses: olafurpg/setup-scala@v13
         with:
           java-version: graalvm-ce-java11@20.1.0
       - uses: arduino/setup-protoc@v1
