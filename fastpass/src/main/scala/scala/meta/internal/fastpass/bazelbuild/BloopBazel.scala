@@ -1,5 +1,6 @@
 package scala.meta.internal.fastpass.bazelbuild
 
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -35,48 +36,132 @@ object BloopBazel {
     if (intellij) Success(None)
     else {
       val bazel = new Bazel(bazelBinary, workspace)
-      val importableRules = supportedRules.keys.toList
       for {
         bazelInfo <- bazel.info()
-        dependencies <- bazel.dependenciesToBuild(
-          project.targets,
-          importableRules,
-          forbiddenGenerators
-        )
-        _ <- bazel.build(dependencies, "_source_jars" :: Nil)
-        importedTargets <- bazel.targetsInfos(
-          project.targets,
-          importableRules,
-          forbiddenGenerators
-        )
-        actions <- bazel.aquery(project.targets)
-        actionGraph = ActionGraph(actions)
-        rawInputs = rawTargetInputs(importedTargets, actionGraph)
-        rawRuntimeInputs = rawRuntimeTargetInputs(importedTargets, actionGraph)
-        inputMappings <- copyJars(
-          bazelInfo,
-          project,
-          importedTargets,
-          actionGraph,
-          rawInputs,
-          rawRuntimeInputs
-        )
         scalaJars <- DependencyResolution.scalaJars
         testFrameworksJars <- DependencyResolution.testingFrameworkJars
-        bloopBazel = new BloopBazel(
+        bloopBazel <- getBloopBazel(
+          app,
           project,
           bazel,
           bazelInfo,
-          importedTargets,
-          actionGraph,
-          inputMappings,
-          rawInputs,
-          rawRuntimeInputs,
           scalaJars,
           testFrameworksJars
         )
       } yield bloopBazel.run()
-    }
+    }.flatten
+  }
+
+  private def getBloopBazel(
+      app: CliApp,
+      project: Project,
+      bazel: Bazel,
+      bazelInfo: BazelInfo,
+      scalaJars: List[Path],
+      testFrameworksJars: List[Path]
+  ): Try[BloopBazel] = {
+    val cache = RemoteCache.configure(bazel, project)
+
+    cache
+      .getFromCache(cachedExportName) { export =>
+        app.info("Using cached Fastpass export.")
+        BloopBazel.fromExport(
+          project,
+          bazel,
+          bazelInfo,
+          scalaJars,
+          testFrameworksJars,
+          export
+        )
+      }
+      .recoverWith {
+        case err =>
+          app.warn(s"No cached export available: ${err.getMessage}")
+          val importableRules = supportedRules.keys.toList
+          for {
+            dependencies <- bazel.dependenciesToBuild(
+              project.targets,
+              importableRules,
+              forbiddenGenerators
+            )
+            importedTargets <- bazel.targetsInfos(
+              project.targets,
+              importableRules,
+              forbiddenGenerators
+            )
+            actions <- bazel.aquery(project.targets)
+            actionGraph = ActionGraph(actions)
+            rawInputs = rawTargetInputs(importedTargets, actionGraph)
+            rawRuntimeInputs =
+              rawRuntimeTargetInputs(importedTargets, actionGraph)
+          } yield {
+            val bloopBazel = new BloopBazel(
+              project,
+              bazel,
+              bazelInfo,
+              dependencies,
+              importedTargets,
+              actionGraph,
+              rawInputs,
+              rawRuntimeInputs,
+              scalaJars,
+              testFrameworksJars
+            )
+            cache
+              .writeToCache(cachedExportName)(bloopBazel.writeExport)
+              .fold(
+                ex => app.warn(s"Write to cached failed: ${ex.getMessage}"),
+                hasWritten =>
+                  if (hasWritten) app.info("Export written to cache.")
+                  else ()
+              )
+            bloopBazel
+          }
+      }
+  }
+
+  private def fromExport(
+      project: Project,
+      bazel: Bazel,
+      bazelInfo: BazelInfo,
+      scalaJars: List[Path],
+      testFrameworksJars: List[Path],
+      export: java.io.InputStream
+  ): BloopBazel = {
+    val js = ujson.read(export)
+    val dependenciesToBuild = js("dependenciesToBuild").arr.toList.map(_.str)
+    val importedTargets = js("importedTargets").arr.toList
+      .map(JsonUtils.jsonToProto(_)(Target.parseFrom))
+    val actionGraph = ActionGraph.fromJson(js("actionGraph"))
+    val rawTargetInputs =
+      JsonUtils.mapFromJson(
+        js("rawTargetInputs"),
+        "target",
+        JsonUtils.jsonToProto(_)(Target.parseFrom),
+        "artifacts",
+        _.arr.toList.map(JsonUtils.jsonToProto(_)(Artifact.parseFrom))
+      )
+    val rawRuntimeTargetInputs =
+      JsonUtils.mapFromJson(
+        js("rawRuntimeTargetInputs"),
+        "target",
+        JsonUtils.jsonToProto(_)(Target.parseFrom),
+        "artifacts",
+        _.arr.toList.map(JsonUtils.jsonToProto(_)(Artifact.parseFrom))
+      )
+
+    new BloopBazel(
+      project,
+      bazel,
+      bazelInfo,
+      dependenciesToBuild,
+      importedTargets,
+      actionGraph,
+      rawTargetInputs,
+      rawRuntimeTargetInputs,
+      scalaJars,
+      testFrameworksJars
+    )
   }
 
   private def copyImmutableJars(
@@ -249,49 +334,84 @@ object BloopBazel {
     "antlr"
   )
 
+  private val cachedExportName: String = "fastpass-export.json"
 }
 
 private class BloopBazel(
     project: Project,
     bazel: Bazel,
     bazelInfo: BazelInfo,
+    dependenciesToBuild: List[String],
     importedTargets: List[Target],
     actionGraph: ActionGraph,
-    inputsMapping: CopiedJars,
     rawTargetInputs: Map[Target, List[Artifact]],
     rawRuntimeTargetInputs: Map[Target, List[Artifact]],
     scalaJars: List[Path],
     testFrameworksJars: List[Path]
 ) {
 
-  def run(): Option[PantsExportResult] = {
-    val bloopDir = this.project.bspRoot.resolve(".bloop").toNIO
-    Files.createDirectories(bloopDir)
+  def run(): Try[Option[PantsExportResult]] = {
+    bazel.build(dependenciesToBuild, "_source_jars" :: Nil).flatMap { _ =>
+      BloopBazel
+        .copyJars(
+          bazelInfo,
+          project,
+          importedTargets,
+          actionGraph,
+          rawTargetInputs,
+          rawRuntimeTargetInputs
+        )
+        .map { inputsMapping =>
+          val bloopDir = this.project.bspRoot.resolve(".bloop").toNIO
+          Files.createDirectories(bloopDir)
 
-    ProgressConsole.foreach(
-      "Generating Bloop configuration files",
-      importedTargets
-    ) { target =>
-      val project = bloopProject(target)
-      val file = Config.File("1.5.0", project)
-      val out = bloopDir.resolve(FileUtils.makeJsonFilename(project.name))
-      bloop.config.write(file, out)
+          ProgressConsole.foreach(
+            "Generating Bloop configuration files",
+            importedTargets
+          ) { target =>
+            val project = bloopProject(inputsMapping, target)
+            val file = Config.File("1.5.0", project)
+            val out = bloopDir.resolve(FileUtils.makeJsonFilename(project.name))
+            bloop.config.write(file, out)
+          }
+
+          Some(
+            new PantsExportResult(
+              importedTargets.length,
+              Map.empty,
+              None,
+              Iterator.empty
+            )
+          )
+        }
     }
+  }
 
-    Some(
-      new PantsExportResult(
-        importedTargets.length,
-        Map.empty,
-        None,
-        Iterator.empty
-      )
+  def writeExport(out: OutputStream): Unit = {
+    val newJson = ujson.Obj()
+    newJson("importedTargets") = importedTargets.map(JsonUtils.protoToJson)
+    newJson("dependenciesToBuild") = dependenciesToBuild
+    newJson("actionGraph") = actionGraph.toJson
+    newJson("rawTargetInputs") = JsonUtils.mapToJson(rawTargetInputs)(
+      "target",
+      JsonUtils.protoToJson,
+      "artifacts",
+      _.map(JsonUtils.protoToJson)
     )
+    newJson("rawRuntimeTargetInputs") =
+      JsonUtils.mapToJson(rawRuntimeTargetInputs)(
+        "target",
+        JsonUtils.protoToJson,
+        "artifacts",
+        _.map(JsonUtils.protoToJson)
+      )
+    newJson.writeBytesTo(out)
   }
 
   def dependencies(target: Target): List[Target] =
     targetDependencies.get(target).getOrElse(Nil)
 
-  def classpath(target: Target): List[Path] = {
+  def classpath(inputsMapping: CopiedJars, target: Target): List[Path] = {
     val inputs = rawTargetInputs.getOrElse(target, Nil)
     inputs
       .flatMap(inputsMapping.artifactToPath.get)
@@ -299,7 +419,10 @@ private class BloopBazel(
       .filterNot(_.getFileName().toString.endsWith("-mval.jar"))
   }
 
-  def runtimeClasspath(target: Target): List[Path] = {
+  def runtimeClasspath(
+      inputsMapping: CopiedJars,
+      target: Target
+  ): List[Path] = {
     val inputs = rawRuntimeTargetInputs.getOrElse(
       target,
       rawTargetInputs.getOrElse(target, Nil)
@@ -319,7 +442,10 @@ private class BloopBazel(
     }
   }
 
-  private def bloopProject(target: Target): Config.Project = {
+  private def bloopProject(
+      inputsMapping: CopiedJars,
+      target: Target
+  ): Config.Project = {
     val projectName = BloopBazel.bloopName(target)
     val projectDirectory =
       project.common.workspace.resolve(projectName.takeWhile(_ != ':'))
@@ -340,7 +466,7 @@ private class BloopBazel(
       jvmConfig,
       mainClass = None,
       runtimeConfig = None,
-      classpath = Some(runtimeClasspath(target)),
+      classpath = Some(runtimeClasspath(inputsMapping, target)),
       resources = None
     )
 
@@ -360,7 +486,7 @@ private class BloopBazel(
           ),
       sourceRoots = Some(List(projectDirectory)),
       dependencies = deps,
-      classpath = classpath(target),
+      classpath = classpath(inputsMapping, target),
       out = targetDir.resolve("out").toNIO,
       classesDir = targetDir.resolve("classes").toNIO,
       resources = resources,

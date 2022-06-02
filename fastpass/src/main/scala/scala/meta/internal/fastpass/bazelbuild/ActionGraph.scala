@@ -6,6 +6,10 @@ import scala.collection.mutable.HashSet
 
 import scala.meta.internal.fastpass.bazelbuild.AnalysisProtosV2._
 
+import ujson.Obj
+import ujson.Str
+import ujson.Value
+
 class ActionGraph(
     labelToActions: Map[String, List[Action]],
     idToDepSetOfFiles: Map[Int, DepSetOfFiles],
@@ -64,6 +68,35 @@ class ActionGraph(
     }
   }
 
+  def toJson: Obj = {
+    val newJson = Obj()
+    newJson("labelToActions") = JsonUtils.mapToJson(labelToActions)(
+      "label",
+      Str(_),
+      "actions",
+      _.map(JsonUtils.protoToJson)
+    )
+    newJson("idToDepSetOfFiles") = JsonUtils.mapToJson(idToDepSetOfFiles)(
+      "id",
+      _.toString,
+      "depset",
+      JsonUtils.protoToJson
+    )
+    newJson("idToArtifact") = JsonUtils.mapToJson(idToArtifact)(
+      "id",
+      _.toString,
+      "artifact",
+      JsonUtils.protoToJson
+    )
+    newJson("idToPathFragment") = JsonUtils.mapToJson(idToPathFragment)(
+      "id",
+      _.toString,
+      "pathFragment",
+      JsonUtils.protoToJson
+    )
+    newJson
+  }
+
 }
 
 object ActionGraph {
@@ -74,6 +107,43 @@ object ActionGraph {
     val idToPathFragment = ActionGraph.idToPathFragment(actionGraph)
     new ActionGraph(
       labelToActions,
+      idToDepSetOfFiles,
+      idToArtifact,
+      idToPathFragment
+    )
+  }
+
+  def fromJson(js: Value): ActionGraph = {
+    val labelToAction = JsonUtils.mapFromJson(
+      js("labelToActions"),
+      "label",
+      _.str,
+      "actions",
+      _.arr.toList.map(JsonUtils.jsonToProto(_)(Action.parseFrom))
+    )
+    val idToDepSetOfFiles = JsonUtils.mapFromJson(
+      js("idToDepSetOfFiles"),
+      "id",
+      _.str.toInt,
+      "depset",
+      JsonUtils.jsonToProto(_)(DepSetOfFiles.parseFrom)
+    )
+    val idToArtifact = JsonUtils.mapFromJson(
+      js("idToArtifact"),
+      "id",
+      _.str.toInt,
+      "artifact",
+      JsonUtils.jsonToProto(_)(Artifact.parseFrom)
+    )
+    val idToPathFragment = JsonUtils.mapFromJson(
+      js("idToPathFragment"),
+      "id",
+      _.str.toInt,
+      "pathFragment",
+      JsonUtils.jsonToProto(_)(PathFragment.parseFrom)
+    )
+    new ActionGraph(
+      labelToAction,
       idToDepSetOfFiles,
       idToArtifact,
       idToPathFragment
