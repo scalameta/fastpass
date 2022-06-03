@@ -196,15 +196,20 @@ class Bazel(bazelPath: Path, cwd: Path) {
 
   def sourcesGlobs(
       pkgs: Iterable[String]
-  ): Map[String, (List[String], List[String])] = {
-    // Extract source globs by groups of at most 100 packages to avoid
-    // going over the command line max size.
-    pkgs
-      .sliding(100, 100)
-      .foldLeft(Map.empty[String, (List[String], List[String])]) {
-        case (acc, pkgGroup) =>
-          acc ++ groupedSourcesGlobs(pkgGroup)
-      }
+  ): Try[Map[String, (List[String], List[String])]] = {
+    ProgressConsole.manual("Inspecting targets source globs", pkgs.size) {
+      advance =>
+        // Extract source globs by groups of at most 100 packages to avoid
+        // going over the command line max size.
+        pkgs
+          .sliding(100, 100)
+          .foldLeft(Map.empty[String, (List[String], List[String])]) {
+            case (acc, pkgGroup) =>
+              val newAcc = acc ++ groupedSourcesGlobs(pkgGroup)
+              advance(pkgGroup.size)
+              newAcc
+          }
+    }
   }
 
   private def groupedSourcesGlobs(

@@ -47,6 +47,12 @@ case class PantsGlobs(
       excludes = excludeGlobs
     )
   }
+  def toJson(): Value = {
+    val newJson = Obj()
+    newJson("globs") = include
+    newJson("exclude") = exclude.map(ex => Obj("globs" -> ex))
+    newJson
+  }
 }
 
 object PantsGlobs {

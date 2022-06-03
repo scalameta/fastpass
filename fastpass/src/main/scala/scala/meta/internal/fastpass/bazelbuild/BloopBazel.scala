@@ -91,6 +91,7 @@ object BloopBazel {
             )
             actions <- bazel.aquery(project.targets)
             actionGraph = ActionGraph(actions)
+            targetGlobs <- targetToSources(importedTargets, bazel)
             rawInputs = rawTargetInputs(importedTargets, actionGraph)
             rawRuntimeInputs =
               rawRuntimeTargetInputs(importedTargets, actionGraph)
@@ -102,6 +103,7 @@ object BloopBazel {
               dependencies,
               importedTargets,
               actionGraph,
+              targetGlobs,
               rawInputs,
               rawRuntimeInputs,
               scalaJars,
@@ -133,6 +135,14 @@ object BloopBazel {
     val importedTargets = js("importedTargets").arr.toList
       .map(JsonUtils.jsonToProto(_)(Target.parseFrom))
     val actionGraph = ActionGraph.fromJson(js("actionGraph"))
+    val targetGlobs =
+      JsonUtils.mapFromJson(
+        js("targetGlobs"),
+        "target",
+        JsonUtils.jsonToProto(_)(Target.parseFrom),
+        "globs",
+        PantsGlobs.fromJson
+      )
     val rawTargetInputs =
       JsonUtils.mapFromJson(
         js("rawTargetInputs"),
@@ -157,6 +167,7 @@ object BloopBazel {
       dependenciesToBuild,
       importedTargets,
       actionGraph,
+      targetGlobs,
       rawTargetInputs,
       rawRuntimeTargetInputs,
       scalaJars,
@@ -322,6 +333,23 @@ object BloopBazel {
     } else path
   }
 
+  private def targetToSources(
+      importedTargets: List[Target],
+      bazel: Bazel
+  ): Try[Map[Target, PantsGlobs]] = {
+    val packages =
+      importedTargets.map(_.getRule().getName().takeWhile(_ != ':')).distinct
+    bazel.sourcesGlobs(packages).map { labelToSources =>
+      val mappings = for {
+        target <- importedTargets
+        label = target.getRule().getName()
+        (includes, excludes) <- labelToSources.get(label)
+        globs = PantsGlobs(includes, excludes)
+      } yield target -> globs
+      mappings.toMap
+    }
+  }
+
   private val supportedRules: Map[String, Set[String]] = Map(
     "scala_library" -> Set("Scalac"),
     "_java_library" -> Set("Scalac"),
@@ -344,6 +372,7 @@ private class BloopBazel(
     dependenciesToBuild: List[String],
     importedTargets: List[Target],
     actionGraph: ActionGraph,
+    targetGlobs: Map[Target, PantsGlobs],
     rawTargetInputs: Map[Target, List[Artifact]],
     rawRuntimeTargetInputs: Map[Target, List[Artifact]],
     scalaJars: List[Path],
@@ -392,6 +421,12 @@ private class BloopBazel(
     newJson("importedTargets") = importedTargets.map(JsonUtils.protoToJson)
     newJson("dependenciesToBuild") = dependenciesToBuild
     newJson("actionGraph") = actionGraph.toJson
+    newJson("targetGlobs") = JsonUtils.mapToJson(targetGlobs)(
+      "target",
+      JsonUtils.protoToJson,
+      "globs",
+      _.toJson
+    )
     newJson("rawTargetInputs") = JsonUtils.mapToJson(rawTargetInputs)(
       "target",
       JsonUtils.protoToJson,
@@ -586,10 +621,9 @@ private class BloopBazel(
     }.toMap
   }
 
-  private val targetsSources = targetToSources()
   private def targetSources(target: Target): PantsGlobs =
     if (isResources(target)) PantsGlobs.empty
-    else targetsSources.getOrElse(target, defaultGlobs(target))
+    else targetGlobs.getOrElse(target, defaultGlobs(target))
 
   private def isTest(target: Target): Boolean = {
     target.getRule().getRuleClass() == "scala_junit_test"
@@ -612,19 +646,6 @@ private class BloopBazel(
     target.getRule().getRuleClass() == "scala_library" && generatorFunction(
       target
     ).exists(_ == "resources")
-  }
-
-  private def targetToSources(): Map[Target, PantsGlobs] = {
-    val packages =
-      importedTargets.map(_.getRule().getName().takeWhile(_ != ':')).distinct
-    val labelToSources = bazel.sourcesGlobs(packages)
-    importedTargets.flatMap { target =>
-      labelToSources.get(target.getRule().getName()).map {
-        case (includes, excludes) =>
-          val globs = PantsGlobs(includes, excludes)
-          target -> globs
-      }
-    }.toMap
   }
 
   private def getAttribute(
