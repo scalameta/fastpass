@@ -68,31 +68,31 @@ class ActionGraph(
     }
   }
 
-  def toJson: Obj = {
+  def toJson(index: JsonUtils.ProtoIndex): Obj = {
     val newJson = Obj()
     newJson("labelToActions") = JsonUtils.mapToJson(labelToActions)(
       "label",
       Str(_),
       "actions",
-      _.map(JsonUtils.protoToJson)
+      _.map(JsonUtils.protoToJson(index, _))
     )
     newJson("idToDepSetOfFiles") = JsonUtils.mapToJson(idToDepSetOfFiles)(
       "id",
       _.toString,
       "depset",
-      JsonUtils.protoToJson
+      JsonUtils.protoToJson(index, _)
     )
     newJson("idToArtifact") = JsonUtils.mapToJson(idToArtifact)(
       "id",
       _.toString,
       "artifact",
-      JsonUtils.protoToJson
+      JsonUtils.protoToJson(index, _)
     )
     newJson("idToPathFragment") = JsonUtils.mapToJson(idToPathFragment)(
       "id",
       _.toString,
       "pathFragment",
-      JsonUtils.protoToJson
+      JsonUtils.protoToJson(index, _)
     )
     newJson
   }
@@ -113,34 +113,34 @@ object ActionGraph {
     )
   }
 
-  def fromJson(js: Value): ActionGraph = {
+  def fromJson(protoIndex: IndexedSeq[Value], js: Value): ActionGraph = {
     val labelToAction = JsonUtils.mapFromJson(
       js("labelToActions"),
       "label",
       _.str,
       "actions",
-      _.arr.toList.map(JsonUtils.jsonToProto(_)(Action.parseFrom))
+      _.arr.toList.map(JsonUtils.jsonToProto(protoIndex, _)(Action.parseFrom))
     )
     val idToDepSetOfFiles = JsonUtils.mapFromJson(
       js("idToDepSetOfFiles"),
       "id",
       _.str.toInt,
       "depset",
-      JsonUtils.jsonToProto(_)(DepSetOfFiles.parseFrom)
+      JsonUtils.jsonToProto(protoIndex, _)(DepSetOfFiles.parseFrom)
     )
     val idToArtifact = JsonUtils.mapFromJson(
       js("idToArtifact"),
       "id",
       _.str.toInt,
       "artifact",
-      JsonUtils.jsonToProto(_)(Artifact.parseFrom)
+      JsonUtils.jsonToProto(protoIndex, _)(Artifact.parseFrom)
     )
     val idToPathFragment = JsonUtils.mapFromJson(
       js("idToPathFragment"),
       "id",
       _.str.toInt,
       "pathFragment",
-      JsonUtils.jsonToProto(_)(PathFragment.parseFrom)
+      JsonUtils.jsonToProto(protoIndex, _)(PathFragment.parseFrom)
     )
     new ActionGraph(
       labelToAction,

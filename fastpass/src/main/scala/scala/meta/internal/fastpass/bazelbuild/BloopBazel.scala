@@ -131,15 +131,16 @@ object BloopBazel {
       export: java.io.InputStream
   ): BloopBazel = {
     val js = ujson.read(export)
+    val protoIndex = js("protoIndex").arr.value
     val dependenciesToBuild = js("dependenciesToBuild").arr.toList.map(_.str)
     val importedTargets = js("importedTargets").arr.toList
-      .map(JsonUtils.jsonToProto(_)(Target.parseFrom))
-    val actionGraph = ActionGraph.fromJson(js("actionGraph"))
+      .map(JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom))
+    val actionGraph = ActionGraph.fromJson(protoIndex, js("actionGraph"))
     val targetGlobs =
       JsonUtils.mapFromJson(
         js("targetGlobs"),
         "target",
-        JsonUtils.jsonToProto(_)(Target.parseFrom),
+        JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom),
         "globs",
         PantsGlobs.fromJson
       )
@@ -147,17 +148,19 @@ object BloopBazel {
       JsonUtils.mapFromJson(
         js("rawTargetInputs"),
         "target",
-        JsonUtils.jsonToProto(_)(Target.parseFrom),
+        JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom),
         "artifacts",
-        _.arr.toList.map(JsonUtils.jsonToProto(_)(Artifact.parseFrom))
+        _.arr.toList
+          .map(JsonUtils.jsonToProto(protoIndex, _)(Artifact.parseFrom))
       )
     val rawRuntimeTargetInputs =
       JsonUtils.mapFromJson(
         js("rawRuntimeTargetInputs"),
         "target",
-        JsonUtils.jsonToProto(_)(Target.parseFrom),
+        JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom),
         "artifacts",
-        _.arr.toList.map(JsonUtils.jsonToProto(_)(Artifact.parseFrom))
+        _.arr.toList
+          .map(JsonUtils.jsonToProto(protoIndex, _)(Artifact.parseFrom))
       )
 
     new BloopBazel(
@@ -416,32 +419,38 @@ private class BloopBazel(
     }
   }
 
-  def writeExport(out: OutputStream): Unit = {
-    val newJson = ujson.Obj()
-    newJson("importedTargets") = importedTargets.map(JsonUtils.protoToJson)
-    newJson("dependenciesToBuild") = dependenciesToBuild
-    newJson("actionGraph") = actionGraph.toJson
-    newJson("targetGlobs") = JsonUtils.mapToJson(targetGlobs)(
-      "target",
-      JsonUtils.protoToJson,
-      "globs",
-      _.toJson
-    )
-    newJson("rawTargetInputs") = JsonUtils.mapToJson(rawTargetInputs)(
-      "target",
-      JsonUtils.protoToJson,
-      "artifacts",
-      _.map(JsonUtils.protoToJson)
-    )
-    newJson("rawRuntimeTargetInputs") =
-      JsonUtils.mapToJson(rawRuntimeTargetInputs)(
-        "target",
-        JsonUtils.protoToJson,
-        "artifacts",
-        _.map(JsonUtils.protoToJson)
-      )
-    newJson.writeBytesTo(out)
-  }
+  def writeExport(out: OutputStream): Unit =
+    ProgressConsole
+      .auto("Caching export") { _ =>
+        val newJson = ujson.Obj()
+        val protoIndex = new JsonUtils.ProtoIndex
+        newJson("importedTargets") =
+          importedTargets.map(JsonUtils.protoToJson(protoIndex, _))
+        newJson("dependenciesToBuild") = dependenciesToBuild
+        newJson("actionGraph") = actionGraph.toJson(protoIndex)
+        newJson("targetGlobs") = JsonUtils.mapToJson(targetGlobs)(
+          "target",
+          JsonUtils.protoToJson(protoIndex, _),
+          "globs",
+          _.toJson
+        )
+        newJson("rawTargetInputs") = JsonUtils.mapToJson(rawTargetInputs)(
+          "target",
+          JsonUtils.protoToJson(protoIndex, _),
+          "artifacts",
+          _.map(JsonUtils.protoToJson(protoIndex, _))
+        )
+        newJson("rawRuntimeTargetInputs") =
+          JsonUtils.mapToJson(rawRuntimeTargetInputs)(
+            "target",
+            JsonUtils.protoToJson(protoIndex, _),
+            "artifacts",
+            _.map(JsonUtils.protoToJson(protoIndex, _))
+          )
+        newJson("protoIndex") = protoIndex.toJson
+        newJson.writeBytesTo(out)
+      }
+      .get
 
   def dependencies(target: Target): List[Target] =
     targetDependencies.get(target).getOrElse(Nil)

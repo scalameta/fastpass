@@ -1,16 +1,49 @@
 package scala.meta.internal.fastpass.bazelbuild
 
 import java.util.Base64
+import java.util.LinkedHashMap
 
 import com.google.protobuf.MessageLite
+import ujson.Arr
 import ujson.Obj
 import ujson.Str
 import ujson.Value
 
 object JsonUtils {
-  def protoToJson(msg: MessageLite): Str = {
-    val str = new String(Base64.getEncoder.encode(msg.toByteArray()))
-    Str(str)
+
+  class ProtoIndex {
+    private val index = new LinkedHashMap[MessageLite, Int]()
+
+    def getOrUpdate(message: MessageLite): Int = {
+      index.computeIfAbsent(message, _ => index.size)
+    }
+
+    def toJson: Value = {
+      val arr = Arr()
+      index.forEach {
+        case (key, _) =>
+          val js = protoToJson(key)
+          arr.value.append(js)
+      }
+      arr
+    }
+
+    private def protoToJson(msg: MessageLite): Value = {
+      val str = new String(Base64.getEncoder.encode(msg.toByteArray()))
+      Str(str)
+    }
+  }
+
+  def protoToJson(index: ProtoIndex, msg: MessageLite): Value = {
+    index.getOrUpdate(msg)
+  }
+
+  def jsonToProto[T](index: IndexedSeq[Value], js: Value)(
+      op: Array[Byte] => T
+  ): T = {
+    val item = index(js.num.toInt)
+    val bytes = Base64.getDecoder().decode(item.str)
+    op(bytes)
   }
 
   def mapToJson[K, V](obj: Map[K, V])(
@@ -40,11 +73,6 @@ object JsonUtils {
       val value = valueOp(entry(valueKey))
       key -> value
     }.toMap
-  }
-
-  def jsonToProto[T](js: Value)(op: Array[Byte] => T): T = {
-    val bytes = Base64.getDecoder().decode(js.str)
-    op(bytes)
   }
 
 }
