@@ -8,6 +8,7 @@ lazy val V = new {
   val scalameta = "4.4.0"
   val bsp = "2.0.0-M4+10-61e61e87"
   val munit = "0.7.7"
+  val xz = "1.9"
 }
 
 val MUnitFramework = new TestFramework("munit.Framework")
@@ -134,7 +135,8 @@ lazy val fastpass = project
       "ch.epfl.scala" %% "bloop-frontend" % V.bloop,
       "ch.epfl.scala" %% "bloop-config" % V.bloop,
       "org.scalameta" %% "trees" % V.scalameta,
-      "ch.epfl.scala" % "bsp4j" % V.bsp
+      "ch.epfl.scala" % "bsp4j" % V.bsp,
+      "org.tukaani" % "xz" % V.xz
     ),
     buildInfoPackage := "scala.meta.internal.fastpass",
     buildInfoKeys := Seq[BuildInfoKey](

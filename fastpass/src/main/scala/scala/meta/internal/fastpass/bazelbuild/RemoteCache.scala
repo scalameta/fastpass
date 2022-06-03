@@ -9,8 +9,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.security.MessageDigest
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
 
 import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.util.Failure
@@ -20,6 +18,10 @@ import scala.util.Try
 import scala.meta.internal.fastpass.BuildInfo
 import scala.meta.internal.fastpass.MessageOnlyException
 import scala.meta.internal.fastpass.generic.Project
+
+import org.tukaani.xz.LZMA2Options
+import org.tukaani.xz.XZInputStream
+import org.tukaani.xz.XZOutputStream
 
 sealed trait RemoteCache {
   def getFromCache[T](filename: String)(op: InputStream => T): Try[T]
@@ -45,7 +47,7 @@ private class HttpRemoteCache(
     val url = artifactUrl(filename)
     Try {
       val connection = url.openConnection()
-      val stream = new GZIPInputStream(connection.getInputStream())
+      val stream = new XZInputStream(connection.getInputStream())
       try op(stream)
       finally stream.close()
     }
@@ -63,7 +65,12 @@ private class HttpRemoteCache(
             cacheConfig.credentials.map(_.encoded).foreach {
               connection.setRequestProperty("Authorization", _)
             }
-            val stream = new GZIPOutputStream(connection.getOutputStream())
+            val stream = new XZOutputStream(
+              connection.getOutputStream(),
+              // Export may be >32MB, so use large dictionary size.
+              // See https://tukaani.org/xz/xz-javadoc/org/tukaani/xz/LZMA2Options.html#setPreset(int)
+              new LZMA2Options(9)
+            )
             try {
               op(stream)
               stream.flush()
