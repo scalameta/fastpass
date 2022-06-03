@@ -200,7 +200,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
     // Extract source globs by groups of at most 100 packages to avoid
     // going over the command line max size.
     pkgs
-      .sliding(100)
+      .sliding(100, 100)
       .foldLeft(Map.empty[String, (List[String], List[String])]) {
         case (acc, pkgGroup) =>
           acc ++ groupedSourcesGlobs(pkgGroup)
