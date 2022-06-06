@@ -56,16 +56,26 @@ object CreateCommand extends Command[CreateOptions]("create") {
     val name = create.actualName
     Project.fromName(name, create.common) match {
       case Some(value) =>
-        app.error(
-          s"can't create project named '${name}' because it already exists." +
-            s"\n\tTo refresh the project run: 'fastpass refresh ${name}'" +
-            s"\n\tTo open the project run: 'fastpass open --intellij ${name}'" +
-            s"\n\t                     or: 'fastpass open --vscode ${name}'"
-        )
-        if (create.open.launch(value))
-          0
-        else
-          1
+        if (value.matchesCreateOptions(create)) {
+          app.info(s"Project '$name' already exists; refreshing.")
+          val refreshOptions = RefreshOptions(
+            projects = name :: Nil,
+            open = create.open,
+            common = create.common
+          )
+          RefreshCommand.run(refreshOptions, app)
+        } else {
+          app.error(
+            s"can't create project named '${name}' because it already exists, and was created with a different setup." +
+              s"\n\tTo refresh the project run: 'fastpass refresh ${name}'" +
+              s"\n\tTo open the project run: 'fastpass open --intellij ${name}'" +
+              s"\n\t                     or: 'fastpass open --vscode ${name}'"
+          )
+          if (create.open.launch(value))
+            0
+          else
+            1
+        }
 
       case None =>
         val importMode =

@@ -590,4 +590,46 @@ class BloopPantsSuite extends FastpassSuite {
     rootProject.hasBinariesOnCompileClasspath("lib.actual-dependency.jar")
   }
 
+  test("create with existing project triggers refresh") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/core/BUILD
+                                 |scala_library(
+                                 |  sources=['*.scala'],
+                                 |)
+                                 |/core/A.scala
+                                 |object A
+                                 |""".stripMargin)
+    workspace
+      .run("create" :: "--name" :: "example/pants-project" :: "::" :: Nil)
+      .succeeds
+    val projects = workspace.projects()
+    assertEquals(projects.keys, Set("-project-root", "core:core"))
+
+    workspace
+      .run("create" :: "--name" :: "example/pants-project" :: "::" :: Nil)
+      .succeeds
+  }
+
+  test("create with existing project and different options fails") {
+    val workspace = Workspace(s"""$pantsIni
+                                 |/core/BUILD
+                                 |scala_library(
+                                 |  sources=['*.scala'],
+                                 |)
+                                 |/core/A.scala
+                                 |object A
+                                 |""".stripMargin)
+    workspace
+      .run("create" :: "--name" :: "example/changing-project" :: "::" :: Nil)
+      .succeeds
+    val projects = workspace.projects()
+    assertEquals(projects.keys, Set("-project-root", "core:core"))
+
+    workspace
+      .run(
+        "create" :: "--bazel" :: "--name" :: "example/changing-project" :: "::" :: Nil
+      )
+      .fails
+  }
+
 }
