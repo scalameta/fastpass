@@ -55,7 +55,7 @@ object ProgressConsole {
       manual(title, elems.size) { advance =>
         elems.foreach { elem =>
           f(elem)
-          advance()
+          advance(1)
         }
       }
     }
@@ -74,16 +74,16 @@ object ProgressConsole {
       title: String,
       total: Long,
       output: Console = new ScrollableConsole(System.err, 5)
-  )(op: (() => Unit) => T): Try[T] = {
+  )(op: ((Long) => Unit) => T): Try[T] = {
     val console = new ProgressConsole(Progress.NoProgress, title, output)
     var currentProgress: Long = 0
-    val advance = () => {
+    val advance = (inc: Long) => {
       console.setProgress(
         ProgressUpdate.RemainingElements(currentProgress, total)
       )
-      currentProgress += 1
+      currentProgress += inc
     }
-    advance()
+    advance(0)
     timed(
       output.stream,
       title,
