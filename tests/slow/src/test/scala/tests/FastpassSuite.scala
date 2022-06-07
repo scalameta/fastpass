@@ -202,5 +202,9 @@ trait FastpassSuite extends munit.FunSuite with BloopAssertions {
       assertEquals(exitCode, 0, out + err)
       this
     }
+    def fails: Captured = {
+      assertNotEquals(exitCode, 0, out + err)
+      this
+    }
   }
 }

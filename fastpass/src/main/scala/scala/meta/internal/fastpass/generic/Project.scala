@@ -27,6 +27,19 @@ case class Project(
     Project.matchesFuzzyName(query, name, fuzzyName) ||
       targets == List(query)
   def bspRoot: AbsolutePath = root.bspRoot
+
+  def matchesCreateOptions(
+      options: CreateOptions
+  ): Boolean = {
+    val optionsName =
+      PantsConfiguration.outputFilename(options.name.getOrElse(name))
+    val optionsIsBazel = options.bazel
+    val existingIsPants = importMode == ImportMode.Pants
+    targets.sorted == options.targets.sorted &&
+    optionsIsBazel != existingIsPants &&
+    optionsName == name
+  }
+
 }
 
 object Project {
