@@ -2,12 +2,7 @@ package scala.meta.internal.fastpass.generic
 
 import java.io.File
 
-import scala.util.Failure
-import scala.util.Success
-
 import scala.meta.internal.fastpass.FastpassEnrichments._
-import scala.meta.internal.fastpass.LogMessages
-import scala.meta.internal.fastpass.MessageOnlyException
 import scala.meta.internal.fastpass.Time
 import scala.meta.internal.fastpass.Timer
 import scala.meta.internal.fastpass.bazelbuild.BloopBazel
@@ -94,55 +89,15 @@ object CreateCommand extends Command[CreateOptions]("create") {
                 app
               )
           }
-        installResult match {
-          case Failure(exception) =>
-            exception match {
-              case MessageOnlyException(message) =>
-                app.error(message)
-              case _ =>
-                app.error(s"fastpass failed to run")
-                exception.printStackTrace(app.out)
-            }
-            1
-          case Success(exportResult) =>
-            IntelliJ.writeBsp(
-              project,
-              create.common,
-              create.export.coursierBinary,
-              exportResult
-            )
-            exportResult.foreach { result =>
-              val targets =
-                LogMessages.pluralName(
-                  s"${importMode} target",
-                  result.exportedTargets
-                )
-              app.info(
-                s"exported ${targets} to project '${project.name}' in $timer"
-              )
-            }
-            SwitchCommand.runSymlinkOrWarn(
-              project,
-              create.common,
-              app,
-              isStrict = false
-            )
-
-            if (create.export.canBloopExit) {
-              SharedCommand.restartBloopIfNewSettings(app, exportResult)
-            }
-            if (create.open.isEmpty) {
-              OpenCommand.onEmpty(project, app)
-            } else {
-              OpenCommand.run(
-                create.open
-                  .withProject(project)
-                  .withWorkspace(create.common.workspace),
-                app
-              )
-            }
-            0
-        }
+        SharedCommand.postExportActions(
+          app,
+          project,
+          create.export,
+          create.open,
+          importMode,
+          timer,
+          installResult
+        )
     }
   }
 
