@@ -605,8 +605,11 @@ class BloopPantsSuite extends FastpassSuite {
     val projects = workspace.projects()
     assertEquals(projects.keys, Set("-project-root", "core:core"))
 
+    // We need to prevent Bloop from restarting because it's not installed in CI.
     workspace
-      .run("create" :: "--name" :: "example/pants-project" :: "::" :: Nil)
+      .run(
+        "create" :: "--name" :: "example/pants-project" :: "::" :: "--no-bloop-exit" :: Nil
+      )
       .succeeds
   }
 

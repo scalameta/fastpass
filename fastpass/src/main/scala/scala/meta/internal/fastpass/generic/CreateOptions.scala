@@ -24,6 +24,10 @@ case class CreateOptions(
       "Whether to use Bazel for project import. Defaults to false."
     )
     bazel: Boolean = false,
+    @Description(
+      "Whether to exit after updating the remote cache. Defaults to false."
+    )
+    stopAfterCache: Boolean = false,
     @Hidden() @Inline export: ExportOptions = ExportOptions.default,
     @Hidden() @Inline open: OpenOptions = OpenOptions.default,
     @Hidden() @Inline common: SharedOptions = SharedOptions.default
