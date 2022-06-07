@@ -146,7 +146,7 @@ object BloopBazel {
         "target",
         JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom),
         "globs",
-        PantsGlobs.fromJson
+        js => PantsGlobs.fromJson(ujson.Obj("globs" -> js))
       )
     val rawTargetInputs =
       JsonUtils.mapFromJson(
