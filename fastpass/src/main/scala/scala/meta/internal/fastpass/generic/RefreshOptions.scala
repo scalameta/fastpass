@@ -11,6 +11,10 @@ case class RefreshOptions(
     projects: List[String] = Nil,
     @Hidden()
     update: Boolean = false,
+    @Description(
+      "Whether to exit after updating the remote cache. Defaults to false."
+    )
+    stopAfterCache: Boolean = false,
     @Inline export: ExportOptions = ExportOptions.default,
     @Inline open: OpenOptions = OpenOptions.default,
     @Inline common: SharedOptions = SharedOptions()

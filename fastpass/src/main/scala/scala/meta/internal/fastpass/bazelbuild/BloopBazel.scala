@@ -31,6 +31,7 @@ object BloopBazel {
       workspace: Path,
       bazelBinary: Path,
       intellij: Boolean,
+      stopAfterCache: Boolean,
       app: CliApp
   ): Try[Option[PantsExportResult]] = {
     if (intellij) Success(None)
@@ -48,7 +49,10 @@ object BloopBazel {
           scalaJars,
           testFrameworksJars
         )
-      } yield bloopBazel.run()
+      } yield {
+        if (stopAfterCache) Success(None)
+        else bloopBazel.run()
+      }
     }.flatten
   }
 
