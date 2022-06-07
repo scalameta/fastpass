@@ -5,10 +5,15 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 import scala.sys.process._
+import scala.util.Failure
+import scala.util.Success
 import scala.util.Try
 
 import scala.meta.internal.fastpass.BuildInfo
 import scala.meta.internal.fastpass.FastpassEnrichments._
+import scala.meta.internal.fastpass.LogMessages
+import scala.meta.internal.fastpass.MessageOnlyException
+import scala.meta.internal.fastpass.Timer
 import scala.meta.internal.fastpass.pantsbuild.PantsExportResult
 
 import metaconfig.cli.CliApp
@@ -17,6 +22,67 @@ import metaconfig.cli.TabCompletionItem
 import metaconfig.internal.Levenshtein
 
 object SharedCommand {
+
+  def postExportActions(
+      app: CliApp,
+      project: Project,
+      export: ExportOptions,
+      open: OpenOptions,
+      importMode: ImportMode,
+      timer: Timer,
+      installResult: Try[Option[PantsExportResult]]
+  ): Int = {
+    installResult match {
+      case Failure(exception) =>
+        exception match {
+          case MessageOnlyException(message) =>
+            app.error(message)
+          case _ =>
+            app.error(s"fastpass failed to run")
+            exception.printStackTrace(app.out)
+        }
+        1
+      case Success(exportResult) =>
+        IntelliJ.writeBsp(
+          project,
+          project.common,
+          export.coursierBinary,
+          exportResult
+        )
+        exportResult.foreach { result =>
+          val targets =
+            LogMessages.pluralName(
+              s"${importMode} target",
+              result.exportedTargets
+            )
+          app.info(
+            s"exported ${targets} to project '${project.name}' in $timer"
+          )
+        }
+        SwitchCommand.runSymlinkOrWarn(
+          project,
+          project.common,
+          app,
+          isStrict = false
+        )
+
+        if (export.canBloopExit) {
+          SharedCommand.restartBloopIfNewSettings(app, exportResult)
+        }
+        if (open.isEmpty) {
+          OpenCommand.onEmpty(project, app)
+        } else {
+          OpenCommand.run(
+            open
+              .withProject(project)
+              .withWorkspace(project.common.workspace),
+            app
+          )
+        }
+        0
+    }
+  }
+
   def restartBloopIfNewSettings(
       app: CliApp,
       exportResult: Option[PantsExportResult]

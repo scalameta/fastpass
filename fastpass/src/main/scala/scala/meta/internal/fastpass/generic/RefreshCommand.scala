@@ -1,9 +1,7 @@
 package scala.meta.internal.fastpass.generic
 
-import scala.util.Failure
-import scala.util.Try
-
-import scala.meta.internal.fastpass.MessageOnlyException
+import scala.meta.internal.fastpass.Time
+import scala.meta.internal.fastpass.Timer
 import scala.meta.internal.fastpass.bazelbuild.BloopBazel
 import scala.meta.internal.fastpass.pantsbuild.commands.PantsRefresh
 
@@ -32,36 +30,39 @@ object RefreshCommand extends Command[RefreshOptions]("refresh") {
   def run(refresh: RefreshOptions, app: CliApp): Int = {
     val existingProjects = Project.fromCommon(refresh.common)
     refresh.projects.map { projectName =>
+      val timer = new Timer(Time.system)
       existingProjects.find(_.matchesName(projectName)) match {
         case None =>
           SharedCommand.noSuchProject(projectName, app, refresh.common)
         case Some(project) if project.importMode == ImportMode.Pants =>
-          reportFailure(app, PantsRefresh.run(refresh, project, app))
-        case Some(project) if project.importMode == ImportMode.Bazel =>
-          reportFailure(
+          val installResult = PantsRefresh.run(refresh, project, app)
+          SharedCommand.postExportActions(
             app,
-            BloopBazel.run(
-              project,
-              refresh.common.workspace,
-              refresh.common.bazelBinary,
-              refresh.open.intellij,
-              app
-            )
+            project,
+            refresh.export,
+            refresh.open,
+            ImportMode.Pants,
+            timer,
+            installResult
+          )
+        case Some(project) if project.importMode == ImportMode.Bazel =>
+          val installResult = BloopBazel.run(
+            project,
+            refresh.common.workspace,
+            refresh.common.bazelBinary,
+            refresh.open.intellij,
+            app
+          )
+          SharedCommand.postExportActions(
+            app,
+            project,
+            refresh.export,
+            refresh.open,
+            ImportMode.Bazel,
+            timer,
+            installResult
           )
       }
     }.sum
   }
-
-  private def reportFailure[T](app: CliApp, op: Try[T]): Int =
-    op match {
-      case Failure(MessageOnlyException(msg)) =>
-        app.error(msg)
-        1
-      case Failure(other) =>
-        app.error(s"fastpass failed to run")
-        other.printStackTrace(app.out)
-        1
-      case _ =>
-        0
-    }
 }
