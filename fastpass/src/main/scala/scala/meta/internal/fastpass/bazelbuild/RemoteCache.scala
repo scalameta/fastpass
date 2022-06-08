@@ -100,9 +100,7 @@ private class HttpRemoteCache(
 
   private def artifactUrl(filename: String): URL =
     cacheConfig.uri
-      .resolve("buildcache/")
-      .resolve("1.0/")
-      .resolve(filename + ".gz/")
+      .resolve(filename + ".xz/")
       .resolve(cacheKey)
       .toURL()
 }
