@@ -136,7 +136,10 @@ object RemoteCache {
           .get("credentials")
           .flatMap(CacheCredentials.read(url.getHost(), _))
       val enableUpload =
-        js("enable-upload").boolOpt.getOrElse(credentials.isDefined)
+        js.obj
+          .get("enable-upload")
+          .flatMap(_.boolOpt)
+          .getOrElse(credentials.isDefined)
       CacheConfig(url, enableUpload, credentials)
     }
   }
