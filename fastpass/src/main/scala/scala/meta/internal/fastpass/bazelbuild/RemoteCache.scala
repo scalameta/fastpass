@@ -100,9 +100,7 @@ private class HttpRemoteCache(
 
   private def artifactUrl(filename: String): URL =
     cacheConfig.uri
-      .resolve("buildcache/")
-      .resolve("1.0/")
-      .resolve(filename + ".gz/")
+      .resolve(filename + ".xz/")
       .resolve(cacheKey)
       .toURL()
 }
@@ -136,7 +134,10 @@ object RemoteCache {
           .get("credentials")
           .flatMap(CacheCredentials.read(url.getHost(), _))
       val enableUpload =
-        js("enable-upload").boolOpt.getOrElse(credentials.isDefined)
+        js.obj
+          .get("enable-upload")
+          .flatMap(_.boolOpt)
+          .getOrElse(credentials.isDefined)
       CacheConfig(url, enableUpload, credentials)
     }
   }
