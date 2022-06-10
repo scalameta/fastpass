@@ -2,6 +2,7 @@ package scala.meta.internal.fastpass.bazelbuild
 
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
+import java.io.PrintWriter
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -245,6 +246,9 @@ class Bazel(bazelPath: Path, cwd: Path) {
   ): Int = {
     val io =
       new ProcessIO(_ => (), FileUtils.copy(_, out), FileUtils.copy(_, err))
+    val errWriter = new PrintWriter(err)
+    errWriter.println(s"# Running command in ${cwd}:")
+    errWriter.println(s"$$ ${cmd.mkString(" ")}")
     Process(cmd, cwd.toFile)
       .run(io)
       .exitValue()
