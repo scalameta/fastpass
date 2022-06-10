@@ -28,6 +28,7 @@ case class SharedOptions(
     bazelPath: Option[Path] = None
 ) {
   def bloopDirectory: Path = workspace.resolve(".bloop")
+  def venvDirectory: Path = workspace.resolve(".venv")
   def pantsBinary: Path = pants.getOrElse(workspace.resolve("pants"))
   def bazelBinary: Path = bazelPath.getOrElse(workspace.resolve("bazel"))
   val home: AbsolutePath = AbsolutePath {

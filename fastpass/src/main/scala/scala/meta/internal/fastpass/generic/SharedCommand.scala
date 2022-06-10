@@ -50,13 +50,25 @@ object SharedCommand {
           exportResult
         )
         exportResult.foreach { result =>
-          val targets =
+          val jvmTargets =
             LogMessages.pluralName(
-              s"${importMode} target",
-              result.exportedTargets
+              s"${importMode} JVM target",
+              result.exportedJvmTargets
             )
+          val pythonTargets =
+            LogMessages.pluralName(
+              "Python target",
+              result.exportedPythonTargets
+            )
+          val targets =
+            (result.exportedJvmTargets, result.exportedPythonTargets) match {
+              case (0, 0) => "no targets"
+              case (_, 0) => jvmTargets
+              case (0, _) => pythonTargets
+              case _ => s"$jvmTargets and $pythonTargets"
+            }
           app.info(
-            s"exported ${targets} to project '${project.name}' in $timer"
+            s"exported $targets to project '${project.name}' in $timer"
           )
         }
         SwitchCommand.runSymlinkOrWarn(

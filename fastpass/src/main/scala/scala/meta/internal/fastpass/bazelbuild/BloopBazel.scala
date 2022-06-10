@@ -12,6 +12,7 @@ import scala.util.Success
 import scala.util.Try
 
 import scala.meta.internal.fastpass.FileUtils
+import scala.meta.internal.fastpass.RecursivelyDelete
 import scala.meta.internal.fastpass.bazelbuild.AnalysisProtosV2.Artifact
 import scala.meta.internal.fastpass.bazelbuild.Build.Attribute
 import scala.meta.internal.fastpass.bazelbuild.Build.Target
@@ -82,31 +83,37 @@ object BloopBazel {
       .recoverWith {
         case err =>
           app.warn(s"No cached export available: ${err.getMessage}")
-          val importableRules = supportedRules.keys.toList
+          val importableRules =
+            (bloopSupportedRules.keys ++ pythonSupportedRules).toList
           for {
             dependencies <- bazel.dependenciesToBuild(
               project.targets,
               importableRules,
               forbiddenGenerators
             )
-            importedTargets <- bazel.targetsInfos(
+            allImportedTargets <- bazel.targetsInfos(
               project.targets,
               importableRules,
               forbiddenGenerators
             )
+            (jvmImportedTargets, pythonImportedTargets) =
+              allImportedTargets.partition(target =>
+                bloopSupportedRules.contains(target.getRule.getRuleClass)
+              )
             actions <- bazel.aquery(project.targets)
             actionGraph = ActionGraph(actions)
-            targetGlobs <- targetToSources(importedTargets, bazel)
-            rawInputs = rawTargetInputs(importedTargets, actionGraph)
+            targetGlobs <- targetToSources(jvmImportedTargets, bazel)
+            rawInputs = rawTargetInputs(jvmImportedTargets, actionGraph)
             rawRuntimeInputs =
-              rawRuntimeTargetInputs(importedTargets, actionGraph)
+              rawRuntimeTargetInputs(jvmImportedTargets, actionGraph)
           } yield {
             val bloopBazel = new BloopBazel(
               project,
               bazel,
               bazelInfo,
               dependencies,
-              importedTargets,
+              jvmImportedTargets,
+              pythonImportedTargets,
               actionGraph,
               targetGlobs,
               rawInputs,
@@ -138,7 +145,9 @@ object BloopBazel {
     val js = ujson.read(export)
     val protoIndex = js("protoIndex").arr.value
     val dependenciesToBuild = js("dependenciesToBuild").arr.toList.map(_.str)
-    val importedTargets = js("importedTargets").arr.toList
+    val jvmImportedTargets = js("jvmImportedTargets").arr.toList
+      .map(JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom))
+    val pythonImportedTargets = js("pythonImportedTargets").arr.toList
       .map(JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom))
     val actionGraph = ActionGraph.fromJson(protoIndex, js("actionGraph"))
     val targetGlobs =
@@ -173,7 +182,8 @@ object BloopBazel {
       bazel,
       bazelInfo,
       dependenciesToBuild,
-      importedTargets,
+      jvmImportedTargets,
+      pythonImportedTargets,
       actionGraph,
       targetGlobs,
       rawTargetInputs,
@@ -314,7 +324,7 @@ object BloopBazel {
   ): Map[Target, List[Artifact]] = {
     importedTargets.map { target =>
       val ruleClass = target.getRule().getRuleClass()
-      val mnemonics = supportedRules.getOrElse(ruleClass, Set.empty)
+      val mnemonics = bloopSupportedRules.getOrElse(ruleClass, Set.empty)
       val label = target.getRule.getName()
       target -> actionGraph.transitiveInputsOf(label, mnemonics)
     }.toMap
@@ -358,11 +368,17 @@ object BloopBazel {
     }
   }
 
-  private val supportedRules: Map[String, Set[String]] = Map(
+  private val bloopSupportedRules: Map[String, Set[String]] = Map(
     "scala_library" -> Set("Scalac"),
     "_java_library" -> Set("Scalac"),
     "_scala_macro_library" -> Set("Scalac"),
     "scala_junit_test" -> Set("Scalac")
+  )
+
+  private val pythonSupportedRules: Set[String] = Set(
+    "_pex_binary",
+    "py_test",
+    "py_library"
   )
 
   private val forbiddenGenerators: List[String] = List(
@@ -378,7 +394,8 @@ private class BloopBazel(
     bazel: Bazel,
     bazelInfo: BazelInfo,
     dependenciesToBuild: List[String],
-    importedTargets: List[Target],
+    jvmImportedTargets: List[Target],
+    pythonImportedTargets: List[Target],
     actionGraph: ActionGraph,
     targetGlobs: Map[Target, PantsGlobs],
     rawTargetInputs: Map[Target, List[Artifact]],
@@ -388,40 +405,30 @@ private class BloopBazel(
 ) {
 
   def run(): Try[Option[PantsExportResult]] = {
-    bazel.build(dependenciesToBuild, "_source_jars" :: Nil).flatMap { _ =>
-      BloopBazel
-        .copyJars(
-          bazelInfo,
-          project,
-          importedTargets,
-          actionGraph,
-          rawTargetInputs,
-          rawRuntimeTargetInputs
-        )
-        .map { inputsMapping =>
-          val bloopDir = this.project.bspRoot.resolve(".bloop").toNIO
-          Files.createDirectories(bloopDir)
-
-          ProgressConsole.foreach(
-            "Generating Bloop configuration files",
-            importedTargets
-          ) { target =>
-            val project = bloopProject(inputsMapping, target)
-            val file = Config.File("1.5.0", project)
-            val out = bloopDir.resolve(FileUtils.makeJsonFilename(project.name))
-            bloop.config.write(file, out)
-          }
-
-          Some(
-            new PantsExportResult(
-              importedTargets.length,
-              Map.empty,
-              None,
-              Iterator.empty
-            )
-          )
-        }
-    }
+    val bloopDir = this.project.bspRoot.resolve(".bloop").toNIO
+    val vEnvDir = this.project.bspRoot.resolve(".venv").toNIO
+    Files.createDirectories(bloopDir)
+    for {
+      _ <- bazel.build(dependenciesToBuild, "_source_jars" :: Nil)
+      inputsMapping <- BloopBazel.copyJars(
+        bazelInfo,
+        project,
+        jvmImportedTargets,
+        actionGraph,
+        rawTargetInputs,
+        rawRuntimeTargetInputs
+      )
+      _ <- writeBloopConfigFiles(bloopDir, inputsMapping)
+      _ <- buildPythonVEnv(vEnvDir)
+    } yield Some(
+      new PantsExportResult(
+        jvmImportedTargets.length,
+        pythonImportedTargets.length,
+        Map.empty,
+        None,
+        Iterator.empty
+      )
+    )
   }
 
   def writeExport(out: OutputStream): Unit =
@@ -429,8 +436,10 @@ private class BloopBazel(
       .auto("Caching export") { _ =>
         val newJson = ujson.Obj()
         val protoIndex = new JsonUtils.ProtoIndex
-        newJson("importedTargets") =
-          importedTargets.map(JsonUtils.protoToJson(protoIndex, _))
+        newJson("jvmImportedTargets") =
+          jvmImportedTargets.map(JsonUtils.protoToJson(protoIndex, _))
+        newJson("pythonImportedTargets") =
+          pythonImportedTargets.map(JsonUtils.protoToJson(protoIndex, _))
         newJson("dependenciesToBuild") = dependenciesToBuild
         newJson("actionGraph") = actionGraph.toJson(protoIndex)
         newJson("targetGlobs") = JsonUtils.mapToJson(targetGlobs)(
@@ -457,10 +466,36 @@ private class BloopBazel(
       }
       .get
 
-  def dependencies(target: Target): List[Target] =
+  private def writeBloopConfigFiles(
+      bloopDir: Path,
+      inputsMapping: CopiedJars
+  ): Try[Unit] = {
+    ProgressConsole.foreach(
+      "Generating Bloop configuration files",
+      jvmImportedTargets
+    ) { target =>
+      val project = bloopProject(inputsMapping, target)
+      val file = Config.File("1.5.0", project)
+      val out = bloopDir.resolve(FileUtils.makeJsonFilename(project.name))
+      bloop.config.write(file, out)
+    }
+  }
+
+  private def buildPythonVEnv(location: Path): Try[Unit] = {
+    if (pythonImportedTargets.isEmpty) Success(())
+    else {
+      RecursivelyDelete(AbsolutePath(location))
+      bazel.buildVEnv(location, project.targets)
+    }
+  }
+
+  private def dependencies(target: Target): List[Target] =
     targetDependencies.get(target).getOrElse(Nil)
 
-  def classpath(inputsMapping: CopiedJars, target: Target): List[Path] = {
+  private def classpath(
+      inputsMapping: CopiedJars,
+      target: Target
+  ): List[Path] = {
     val inputs = rawTargetInputs.getOrElse(target, Nil)
     inputs
       .flatMap(inputsMapping.artifactToPath.get)
@@ -468,7 +503,7 @@ private class BloopBazel(
       .filterNot(_.getFileName().toString.endsWith("-mval.jar"))
   }
 
-  def runtimeClasspath(
+  private def runtimeClasspath(
       inputsMapping: CopiedJars,
       target: Target
   ): List[Path] = {
@@ -609,7 +644,7 @@ private class BloopBazel(
   private val rawOutputToTarget: Map[Artifact, Target] = {
     val mappings =
       for {
-        target <- importedTargets
+        target <- jvmImportedTargets
         label = target.getRule().getName()
         artifact <- actionGraph.outputsOf(label)
       } yield artifact -> target
@@ -617,7 +652,7 @@ private class BloopBazel(
   }
 
   private val targetDependencies: Map[Target, List[Target]] = {
-    importedTargets.map { target =>
+    jvmImportedTargets.map { target =>
       rawTargetInputs.get(target) match {
         case None => target -> Nil
         case Some(inputs) =>

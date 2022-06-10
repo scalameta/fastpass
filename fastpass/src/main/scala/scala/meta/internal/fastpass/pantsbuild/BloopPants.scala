@@ -289,6 +289,7 @@ private class BloopPants(
     token.checkCanceled()
     new PantsExportResult(
       generatedProjects.size,
+      0,
       internalSources,
       export.jvmDistribution.javaHome,
       export.libraries.valuesIterator

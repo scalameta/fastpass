@@ -156,6 +156,19 @@ class Bazel(bazelPath: Path, cwd: Path) {
     }
   }
 
+  def buildVEnv(location: Path, specs: List[String]): Try[Unit] = {
+    ProgressConsole.auto("Building Python virtual environment") { err =>
+      val cmd =
+        bazel :: "build-venv" :: "--location" :: location.toAbsolutePath.toString :: specs
+      val code = run(cmd, err, err)
+      if (code != 0) {
+        throw new MessageOnlyException(
+          "Could not build Python virtual environment."
+        )
+      }
+    }
+  }
+
   private def importDependencies(
       specs: List[String],
       supportedRules: List[String],
@@ -242,7 +255,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
     }
   }
 
-  def run(
+  private def run(
       cmd: List[String],
       out: OutputStream,
       err: OutputStream = FileUtils.NullOutputStream

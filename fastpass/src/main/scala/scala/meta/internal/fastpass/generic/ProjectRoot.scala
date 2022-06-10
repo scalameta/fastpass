@@ -9,4 +9,5 @@ case class ProjectRoot(
   val pantsLibrariesJson: AbsolutePath =
     bspRoot.resolve(".pants").resolve("libraries.json")
   val bloopRoot: AbsolutePath = bspRoot.resolve(".bloop")
+  val venvRoot: AbsolutePath = bspRoot.resolve(".venv")
 }

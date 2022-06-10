@@ -55,7 +55,11 @@ object SwitchCommand extends Command[SwitchOptions]("switch") {
       val isUnchanged =
         Files.isSymbolicLink(common.bloopDirectory) &&
           Files.readSymbolicLink(common.bloopDirectory) ==
-            project.root.bloopRoot.toNIO
+            project.root.bloopRoot.toNIO &&
+          (!Files.isDirectory(project.root.venvRoot.toNIO) ||
+            Files.isSymbolicLink(common.venvDirectory) &&
+              Files.readSymbolicLink(common.venvDirectory) ==
+                project.root.venvRoot.toNIO)
       if (isUnchanged) {
         if (isStrict) {
           app.info(
@@ -94,12 +98,22 @@ object SwitchCommand extends Command[SwitchOptions]("switch") {
   ): Unit = {
     val workspace = common.workspace
     val workspaceBloop = common.bloopDirectory
+    val workspaceVEnv = common.workspace.resolve(".venv")
     val out = project.root.bspRoot.toNIO
     val outBloop = project.root.bloopRoot.toNIO
+    val outVEnv = project.root.bspRoot.toNIO.resolve(".venv")
 
     if (!Files.exists(workspaceBloop) || Files.isSymbolicLink(workspaceBloop)) {
       Files.deleteIfExists(workspaceBloop)
       Files.createSymbolicLink(workspaceBloop, outBloop)
+    }
+    if (
+      (!Files.exists(workspaceVEnv) || Files.isSymbolicLink(
+        workspaceVEnv
+      )) && Files.isDirectory(outVEnv)
+    ) {
+      Files.deleteIfExists(workspaceVEnv)
+      Files.createSymbolicLink(workspaceVEnv, outVEnv)
     }
     SharedCommand.runScalafmtSymlink(project, common)
   }
