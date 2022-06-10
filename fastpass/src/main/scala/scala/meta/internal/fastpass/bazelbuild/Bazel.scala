@@ -219,15 +219,18 @@ class Bazel(bazelPath: Path, cwd: Path) {
     val out = new ByteArrayOutputStream
     val cmd = List("pants-support/buildifier/bin/buildozer-bazel") ++
       pkgs.map(_ + ":all") ++
-      List("print label kind sources")
+      List("print label sources")
 
     val code = run(cmd, out)
-    val targetInfo = """(.+) (.+) \[(.+)\]""".r
+    val targetInfo = """(.+) \[(.+)\]""".r
+    val noSourcesTargetInfo = """(.+) \(missing\)""".r
     // 1 is the only exit code that indicates complete failure.
     if (code != 1) {
       val lines = out.toString("UTF-8").linesIterator
       lines.foldLeft(Map.empty[String, (List[String], List[String])]) {
-        case (acc, line @ targetInfo(lbl, _, pats)) =>
+        case (acc, line @ noSourcesTargetInfo(lbl)) =>
+          acc + (lbl -> ((Nil, Nil)))
+        case (acc, line @ targetInfo(lbl, pats)) =>
           val (excludes, includes) =
             pats.split(" ").toList.partition(_.startsWith("!"))
           acc + (lbl -> ((includes, excludes.map(_.tail))))
