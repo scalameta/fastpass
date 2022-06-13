@@ -3,7 +3,6 @@ package scala.meta.internal.fastpass.console
 import java.io.PrintStream
 
 import scala.collection.GenTraversableLike
-import scala.collection.GenTraversableOnce
 import scala.collection.generic.CanBuildFrom
 import scala.util.Failure
 import scala.util.Try
@@ -31,19 +30,16 @@ class ProgressConsole(progress: Progress, title: String, output: Console)
 
 object ProgressConsole {
 
-  def flatMap[Repr[T] <: GenTraversableLike[T, Repr[T]], T, B, That](
+  def map[Repr[T] <: GenTraversableLike[T, Repr[T]], T, B, That](
       title: String,
       elems: Repr[T]
   )(
-      f: T => GenTraversableOnce[B]
+      f: T => B
   )(implicit bf: CanBuildFrom[Repr[T], B, That]): Try[That] = {
-    if (!elems.hasDefiniteSize) auto(title)(_ => elems.flatMap(f))
-    else {
-      val builder = bf()
-      foreach(title, elems) { elem =>
-        f(elem).foreach(builder += _)
-      }.map(_ => builder.result())
-    }
+    val builder = bf()
+    foreach(title, elems) { elem =>
+      builder += f(elem)
+    }.map(_ => builder.result())
   }
 
   def foreach[Repr[T] <: GenTraversableLike[T, Repr[T]], T](

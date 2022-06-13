@@ -274,7 +274,9 @@ object BloopBazel {
     val fromOutputs = importedTargets.flatMap { target =>
       val label = target.getRule().getName()
       actionGraph.outputsOf(label).map { output =>
-        output -> targetDirectory(project, target).resolve("classes").toNIO
+        output -> targetDirectory(project, bloopName(target))
+          .resolve("classes")
+          .toNIO
       }
     }.toMap
 
@@ -297,9 +299,9 @@ object BloopBazel {
 
   private def targetDirectory(
       project: Project,
-      target: Target
+      bloopName: String
   ): AbsolutePath = {
-    val dirName = FileUtils.sanitizeFileName(bloopName(target))
+    val dirName = FileUtils.sanitizeFileName(bloopName)
     val dir = project.bspRoot.resolve("out").resolve(dirName)
     Files.createDirectories(dir.toNIO)
     dir
@@ -371,6 +373,49 @@ object BloopBazel {
   )
 
   private val cachedExportName: String = "fastpass-export.json"
+
+  /**
+   * Returns the toplevel directories that enclose all of the target.
+   *
+   * For example, this method returns the directories `a/src` and `b` given the
+   * targets below:
+   *
+   * - a/src:foo
+   * - a/src/inner:bar
+   * - b:b
+   * - b/inner:c
+   */
+  private def sourceRoots(
+      workspace: AbsolutePath,
+      bazelSpecs: List[String],
+      bazelTargets: List[String]
+  ): List[AbsolutePath] = {
+    // We inspect both the specs that were specified by the user and the targets
+    // that ended up being imported.
+    // If we user imported using bazel queries, these sets may be quite different.
+    val fromSpecs = bazelSpecs.flatMap {
+      case s if s.contains("(") => None
+      case s if s.endsWith("/...") =>
+        Some(s.stripPrefix("//").stripSuffix("/..."))
+      case s => Some(s.replaceFirst("/?:.*", "").stripPrefix("//"))
+    }
+    val fromTargets =
+      bazelTargets.map(_.replaceFirst("/?:.*", "").stripPrefix("//"))
+    val parts = (fromSpecs ++ fromTargets).sorted
+    if (parts.isEmpty) Nil
+    else {
+      val buf = mutable.ListBuffer.empty[String]
+      var current = parts(0)
+      buf += current
+      parts.iterator.drop(1).foreach { target =>
+        if (!target.startsWith(current)) {
+          current = target
+          buf += current
+        }
+      }
+      buf.result().map(workspace.resolve)
+    }
+  }
 }
 
 private class BloopBazel(
@@ -388,43 +433,75 @@ private class BloopBazel(
 ) {
 
   def run(): Try[Option[PantsExportResult]] = {
-    bazel.build(dependenciesToBuild, "_source_jars" :: Nil).flatMap { _ =>
-      BloopBazel
-        .copyJars(
-          bazelInfo,
-          project,
-          importedTargets,
-          actionGraph,
-          rawTargetInputs,
-          rawRuntimeTargetInputs
-        )
-        .map { inputsMapping =>
-          val bloopDir = this.project.bspRoot.resolve(".bloop").toNIO
-          Files.createDirectories(bloopDir)
+    val bloopDir = this.project.bspRoot.resolve(".bloop").toNIO
+    Files.createDirectories(bloopDir)
+    for {
+      _ <- bazel.build(dependenciesToBuild, "_source_jars" :: Nil)
+      inputsMapping <- BloopBazel.copyJars(
+        bazelInfo,
+        project,
+        importedTargets,
+        actionGraph,
+        rawTargetInputs,
+        rawRuntimeTargetInputs
+      )
+      projects <- assembleBloopProjects(inputsMapping)
+      syntheticProjects = assembleSyntheticProjects(projects)
+      _ <- writeBloopConfigFiles(bloopDir, projects ++ syntheticProjects)
+    } yield Some(
+      new PantsExportResult(
+        projects.length + syntheticProjects.length,
+        Map.empty,
+        None,
+        Iterator.empty
+      )
+    )
+  }
 
-          ProgressConsole.foreach(
-            "Generating Bloop configuration files",
-            importedTargets
-          ) { target =>
-            val project = bloopProject(inputsMapping, target)
-            val file = Config.File("1.5.0", project)
-            val out = bloopDir.resolve(FileUtils.makeJsonFilename(project.name))
-            bloop.config.write(file, out)
-          }
-
-          Some(
-            new PantsExportResult(
-              importedTargets.length,
-              Map.empty,
-              None,
-              Iterator.empty
-            )
-          )
-        }
+  private def assembleSyntheticProjects(
+      projects: List[Config.Project]
+  ): List[Config.Project] = {
+    val sourceRoots = BloopBazel.sourceRoots(
+      bazelInfo.workspace,
+      project.targets,
+      importedTargets.map(_.getRule.getName)
+    )
+    val isBaseDirectory =
+      projects.filter(_.sourcesGlobs.nonEmpty).map(_.directory).toSet
+    sourceRoots.flatMap { root =>
+      if (isBaseDirectory(root.toNIO)) Nil
+      else {
+        val name = root
+          .toRelative(bazelInfo.workspace)
+          .toURI(isDirectory = false)
+          .toString()
+        List(emptyBloopProject(name + "-project-root", root.toNIO))
+      }
     }
   }
 
-  def writeExport(out: OutputStream): Unit =
+  private def assembleBloopProjects(
+      inputsMapping: CopiedJars
+  ): Try[List[Config.Project]] = {
+    ProgressConsole.map(
+      "Assembling Bloop configurations",
+      importedTargets
+    )(bloopProject(inputsMapping, _))
+  }
+
+  private def writeBloopConfigFiles(
+      bloopDir: Path,
+      projects: List[Config.Project]
+  ): Try[Unit] = {
+    ProgressConsole.foreach("Writing Bloop configuration files", projects) {
+      project =>
+        val file = Config.File("1.5.0", project)
+        val out = bloopDir.resolve(FileUtils.makeJsonFilename(project.name))
+        bloop.config.write(file, out)
+    }
+  }
+
+  private def writeExport(out: OutputStream): Unit =
     ProgressConsole
       .auto("Caching export") { _ =>
         val newJson = ujson.Obj()
@@ -457,10 +534,13 @@ private class BloopBazel(
       }
       .get
 
-  def dependencies(target: Target): List[Target] =
+  private def dependencies(target: Target): List[Target] =
     targetDependencies.get(target).getOrElse(Nil)
 
-  def classpath(inputsMapping: CopiedJars, target: Target): List[Path] = {
+  private def classpath(
+      inputsMapping: CopiedJars,
+      target: Target
+  ): List[Path] = {
     val inputs = rawTargetInputs.getOrElse(target, Nil)
     inputs
       .flatMap(inputsMapping.artifactToPath.get)
@@ -468,7 +548,7 @@ private class BloopBazel(
       .filterNot(_.getFileName().toString.endsWith("-mval.jar"))
   }
 
-  def runtimeClasspath(
+  private def runtimeClasspath(
       inputsMapping: CopiedJars,
       target: Target
   ): List[Path] = {
@@ -500,7 +580,8 @@ private class BloopBazel(
       project.common.workspace.resolve(projectName.takeWhile(_ != ':'))
     val (sources, sourcesGlobs) = targetSourcesAndGlobs(target)
     val deps = dependencies(target).map(BloopBazel.bloopName)
-    val targetDir = BloopBazel.targetDirectory(project, target)
+    val targetDir =
+      BloopBazel.targetDirectory(project, BloopBazel.bloopName(target))
     val resources =
       if (isResources(target)) {
         Some(List(projectDirectory))
@@ -540,6 +621,40 @@ private class BloopBazel(
       platform = Some(jvmPlatform),
       resolution = Some(resolution(inputsMapping.sourceJars)),
       tags = Some(List(if (isTest(target)) Tag.Test else Tag.Library))
+    )
+  }
+
+  // Returns a Bloop project that has no source code. This project only exists
+  // to control for example how the project view is displayed in IntelliJ.
+  private def emptyBloopProject(
+      name: String,
+      directory: Path
+  ): Config.Project = {
+    val directoryName = FileUtils.makeClassesDirFilename(name)
+    val targetDir = BloopBazel.targetDirectory(project, name)
+    Config.Project(
+      name = name,
+      directory = directory,
+      workspaceDir = Some(bazelInfo.workspace.toNIO),
+      sources = Nil,
+      sourcesGlobs = None,
+      sourceRoots = None,
+      dependencies = Nil,
+      classpath = Nil,
+      out = targetDir.resolve("out").toNIO,
+      classesDir = targetDir.resolve("classes").toNIO,
+      // NOTE(olafur): we generate a fake resource directory so that IntelliJ
+      // displays this directory in the "Project files tree" view. This needs to
+      // be a resource directory instead of a source directory to prevent Bloop
+      // from compiling it.
+      resources = Some(List(directory)),
+      scala = None,
+      java = None,
+      sbt = None,
+      test = None,
+      platform = None,
+      resolution = None,
+      tags = None
     )
   }
 
