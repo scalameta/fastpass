@@ -362,7 +362,8 @@ object BloopBazel {
     "scala_library" -> Set("Scalac"),
     "_java_library" -> Set("Scalac"),
     "_scala_macro_library" -> Set("Scalac"),
-    "scala_junit_test" -> Set("Scalac")
+    "scala_junit_test" -> Set("Scalac"),
+    "scala_binary" -> Set("Middleman")
   )
 
   private val forbiddenGenerators: List[String] = List(
