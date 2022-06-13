@@ -1,6 +1,7 @@
 package scala.meta.internal.fastpass.generic
 
 import java.io.File
+import java.nio.file.Files
 
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.Time
@@ -47,7 +48,8 @@ object CreateCommand extends Command[CreateOptions]("create") {
         Nil
     }
   }
-  def run(create: CreateOptions, app: CliApp): Int = {
+  def run(rawOptions: CreateOptions, app: CliApp): Int = {
+    val create = inferOptions(rawOptions)
     val name = create.actualName
     Project.fromName(name, create.common) match {
       case Some(value) =>
@@ -112,6 +114,47 @@ object CreateCommand extends Command[CreateOptions]("create") {
           installResult
         )
     }
+  }
+
+  private def inferOptions(create: CreateOptions): CreateOptions = {
+    def isDir(target: String): Boolean =
+      Files.isDirectory(
+        create.common.workspace.resolve(target.stripPrefix("//"))
+      )
+
+    // If we find a recursive wildcard import, then we know it's a bazel import
+    val isBazel = create.bazel || create.targets.exists(tgt =>
+      tgt.endsWith("/...") || tgt.startsWith("//")
+    )
+
+    if (isBazel) {
+      val targets = create.targets.map { target =>
+        // Don't touch targets that look like Bazel queries
+        if (target.contains(" ") || target.contains("(")) {
+          target
+        }
+        // Translate foo/bar to foo/bar/... This is inconsistent with Pants (foo/bar:bar),
+        // but more likely to be what the user meant: import directory recursively.
+        else if (
+          !target.contains(":") && !target.endsWith("/...") && isDir(target)
+        ) {
+          target + "/..."
+        }
+        // Translate foo/bar:: to foo/bar/...
+        else if (target.endsWith("::") && isDir(target.stripSuffix("::"))) {
+          target.stripSuffix("::") + "/..."
+        }
+        // Translate foo/bar: to foo/bar:all
+        else if (target.endsWith(":") && isDir(target.stripSuffix(":"))) {
+          target + "all"
+        } else target
+      }
+
+      create.copy(bazel = true, targets = targets)
+    } else {
+      create
+    }
+
   }
 
   private def completeTargetSpec(
