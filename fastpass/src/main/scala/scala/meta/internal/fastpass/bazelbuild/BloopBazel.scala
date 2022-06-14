@@ -577,15 +577,34 @@ private class BloopBazel(
       target: Target
   ): Config.Project = {
     val projectName = BloopBazel.bloopName(target)
-    val projectDirectory =
-      project.common.workspace.resolve(projectName.takeWhile(_ != ':'))
+    val projectPackage = projectName.takeWhile(_ != ':')
+    val projectDirectory = project.common.workspace.resolve(projectPackage)
     val (sources, sourcesGlobs) = targetSourcesAndGlobs(target)
     val deps = dependencies(target).map(BloopBazel.bloopName)
     val targetDir =
       BloopBazel.targetDirectory(project, BloopBazel.bloopName(target))
     val resources =
       if (isResources(target)) {
-        Some(List(projectDirectory))
+        // Infer resources root.
+        // See https://github.com/bazelbuild/rules_scala/blob/6c16cff213b76a4126bdc850956046da5db1daaa/scala/private/rule_impls.bzl#L55
+        val resourcesRoot =
+          getAttribute(target, "resource_strip_prefix") match {
+            case Some(prefix) if prefix.getExplicitlySpecified() =>
+              projectPackage.stripPrefix(prefix.getStringValue())
+            case _ =>
+              def stopAfter(
+                  haystack: String,
+                  needle: String
+              ): Option[String] = {
+                val index = haystack.indexOf(needle)
+                if (index == -1) None
+                else Some(haystack.substring(0, index + needle.length))
+              }
+              stopAfter(projectPackage, "resources")
+                .orElse(stopAfter(projectPackage, "java"))
+                .getOrElse(projectPackage)
+          }
+        Some(List(project.common.workspace.resolve(resourcesRoot)))
       } else {
         None
       }
