@@ -1,6 +1,8 @@
 package scala.meta.internal.fastpass.bazelbuild
 
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStreamReader
 import java.io.OutputStream
 import java.io.PrintWriter
 import java.nio.file.Files
@@ -18,6 +20,8 @@ import scala.meta.internal.fastpass.bazelbuild.AnalysisProtosV2.ActionGraphConta
 import scala.meta.internal.fastpass.bazelbuild.Build.QueryResult
 import scala.meta.internal.fastpass.bazelbuild.Build.Target
 import scala.meta.internal.fastpass.console.ProgressConsole
+
+import com.google.protobuf.TextFormat
 
 class Bazel(bazelPath: Path, cwd: Path) {
   private val bazel: String = {
@@ -110,13 +114,18 @@ class Bazel(bazelPath: Path, cwd: Path) {
       val cmd = List(bazel, "aquery", targets.mkString(" + ")) ++ List(
         "--noimplicit_deps",
         "--notool_deps",
-        "--output=proto"
+        // Use textproto instead of proto, see https://github.com/bazelbuild/bazel/issues/12984
+        "--output=textproto"
       )
       val code = run(cmd, out, err)
       if (code != 0) {
         throw new MessageOnlyException("Could not query action graph")
       }
-      ActionGraphContainer.parseFrom(out.toByteArray())
+      val in =
+        new InputStreamReader(new ByteArrayInputStream(out.toByteArray()))
+      val builder = ActionGraphContainer.newBuilder()
+      TextFormat.getParser().merge(in, builder)
+      builder.build()
     }
   }
 
