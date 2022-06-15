@@ -194,7 +194,8 @@ object BloopBazel {
         path.getFileName().toString().stripSuffix(strip) + add
       )
     }
-    val external = bazelInfo.bazelBin.resolve("external").toNIO
+    val bazelBin = bazelInfo.bazelBin.toNIO
+    val external = bazelBin.resolve("external")
     val sourceJars = mutable.Buffer.empty[Path]
     val inputMapping = mutable.Map.empty[Artifact, Path]
     // Ignore artifacts whose path end with these suffixes:
@@ -230,7 +231,8 @@ object BloopBazel {
             )
             possibleSourceJarsPaths.filter(Files.exists(_)).foreach {
               sourceJar =>
-                val mappedPath = dest.resolve(sourceJar.getFileName.toString)
+                val jarPath = bazelBin.relativize(sourceJar)
+                val mappedPath = dest.resolve(jarPath)
                 Files.createDirectories(mappedPath.getParent())
                 Files.copy(
                   sourceJar,
