@@ -21,7 +21,7 @@ case class CreateOptions(
     )
     name: Option[String] = None,
     @Description(
-      "Whether to use Bazel for project import. Defaults to false."
+      "Whether to use Bazel for project import. Inferred from target specs."
     )
     bazel: Boolean = false,
     @Description(

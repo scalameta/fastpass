@@ -22,7 +22,7 @@ import org.typelevel.paiges.Doc
 
 object CreateCommand extends Command[CreateOptions]("create") {
   override def description: Doc =
-    Doc.paragraph("Create a new project from a list of Pants targets")
+    Doc.paragraph("Create a new project from a list of targets")
   override def usage: Doc =
     Doc.text("fastpass create [OPTIONS] [TARGETS ...]")
   override def options: Doc = Messages.options(CreateOptions())
@@ -34,8 +34,10 @@ object CreateCommand extends Command[CreateOptions]("create") {
         "fastpass create --name PROJECT_NAME TARGETS1:: TARGETS2::", "",
         "# Create project with an auto-generated name with Bazel",
         "fastpass create --bazel --name PROJECT_NAME TARGETS1/... TARGETS2/...",
-        "", "# Create project with an auto-generated name and launch IntelliJ",
-        "fastpass create --intellij TARGETS::"
+        "# Create project with an auto-generated name, infer Bazel",
+        "fastpass create --name PROJECT_NAME TARGETS1/... TARGETS2/...", "",
+        "# Create project with an auto-generated name and launch IntelliJ",
+        "fastpass create --intellij TARGETS/..."
       ).map(Doc.text)
     )
   override def complete(
