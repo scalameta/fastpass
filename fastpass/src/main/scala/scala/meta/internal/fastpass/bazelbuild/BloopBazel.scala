@@ -27,6 +27,9 @@ import bloop.config.Tag
 import metaconfig.cli.CliApp
 
 object BloopBazel {
+
+  final val CacheFormatVersion = "1"
+
   def run(
       project: Project,
       workspace: Path,
@@ -65,7 +68,7 @@ object BloopBazel {
       scalaJars: List[Path],
       testFrameworksJars: List[Path]
   ): Try[BloopBazel] = {
-    val cache = RemoteCache.configure(bazel, project)
+    val cache = RemoteCache.configure(bazel, project, CacheFormatVersion)
 
     cache
       .getFromCache(cachedExportName) { export =>

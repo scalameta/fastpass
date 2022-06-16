@@ -15,7 +15,6 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
-import scala.meta.internal.fastpass.BuildInfo
 import scala.meta.internal.fastpass.MessageOnlyException
 import scala.meta.internal.fastpass.generic.Project
 
@@ -112,10 +111,14 @@ private case class CacheConfig(
 )
 
 object RemoteCache {
-  def configure(bazel: Bazel, project: Project): RemoteCache = {
+  def configure(
+      bazel: Bazel,
+      project: Project,
+      cacheFormatVersion: String
+  ): RemoteCache = {
     val cache = for {
       config <- readConfig(project.common.workspace)
-      key <- computeCacheKey(bazel, project)
+      key <- computeCacheKey(bazel, project, cacheFormatVersion)
     } yield new HttpRemoteCache(config, key)
 
     cache match {
@@ -142,7 +145,11 @@ object RemoteCache {
     }
   }
 
-  private def computeCacheKey(bazel: Bazel, project: Project): Try[String] = {
+  private def computeCacheKey(
+      bazel: Bazel,
+      project: Project,
+      cacheFormatVersion: String
+  ): Try[String] = {
     val joinedTargets = project.targets.mkString(" + ")
     bazel
       .query(
@@ -164,7 +171,7 @@ object RemoteCache {
           .sorted
           .distinct
 
-        digest.update(BuildInfo.fastpassVersion.getBytes("UTF-8"))
+        digest.update(cacheFormatVersion.getBytes("UTF-8"))
         project.targets.foreach { target =>
           digest.update(target.getBytes("UTF-8"))
         }
