@@ -23,6 +23,11 @@ import scala.meta.internal.fastpass.console.ProgressConsole
 
 import com.google.protobuf.TextFormat
 
+object Bazel {
+  def isPlainSpec(spec: String): Boolean =
+    !spec.contains("(") && !spec.contains(" ")
+}
+
 class Bazel(bazelPath: Path, cwd: Path) {
   private val bazel: String = {
     val path = cwd.relativize(bazelPath)
