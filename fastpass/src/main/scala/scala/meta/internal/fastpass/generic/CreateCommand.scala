@@ -6,6 +6,7 @@ import java.nio.file.Files
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.Time
 import scala.meta.internal.fastpass.Timer
+import scala.meta.internal.fastpass.bazelbuild.Bazel
 import scala.meta.internal.fastpass.bazelbuild.BloopBazel
 import scala.meta.internal.fastpass.pantsbuild.Export
 import scala.meta.internal.fastpass.pantsbuild.commands.SharedPantsCommand
@@ -130,7 +131,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
     if (isBazel) {
       val targets = create.targets.map { target =>
         // Don't touch targets that look like Bazel queries
-        if (target.contains(" ") || target.contains("(")) {
+        if (!Bazel.isPlainSpec(target)) {
           target
         }
         // Translate foo/bar to foo/bar/... This is inconsistent with Pants (foo/bar:bar),

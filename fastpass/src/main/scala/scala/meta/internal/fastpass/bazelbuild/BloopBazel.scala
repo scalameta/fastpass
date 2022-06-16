@@ -397,7 +397,7 @@ object BloopBazel {
     // that ended up being imported.
     // If we user imported using bazel queries, these sets may be quite different.
     val fromSpecs = bazelSpecs.flatMap {
-      case s if s.contains("(") => None
+      case s if !Bazel.isPlainSpec(s) => None
       case s if s.endsWith("/...") =>
         Some(s.stripPrefix("//").stripSuffix("/..."))
       case s => Some(s.replaceFirst("/?:.*", "").stripPrefix("//"))
@@ -469,8 +469,16 @@ private class BloopBazel(
       project.targets,
       importedTargets.map(_.getRule.getName)
     )
+    def isEmptyGlobs(globsOpt: Option[List[Config.SourcesGlobs]]): Boolean =
+      globsOpt match {
+        case None => true
+        case Some(globs) => globs.forall(_.includes.isEmpty)
+      }
     val isBaseDirectory =
-      projects.filter(_.sourcesGlobs.nonEmpty).map(_.directory).toSet
+      projects
+        .filterNot(project => isEmptyGlobs(project.sourcesGlobs))
+        .map(_.directory)
+        .toSet
     sourceRoots.flatMap { root =>
       if (isBaseDirectory(root.toNIO)) Nil
       else {
