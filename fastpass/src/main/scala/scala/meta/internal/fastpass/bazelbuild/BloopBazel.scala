@@ -4,6 +4,7 @@ import java.io.File
 import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -225,7 +226,11 @@ object BloopBazel {
           // to run the tests.
           val selectedArtifact =
             maybeExcludeIJar(bazelInfo.executionRoot.toNIO, artifactPath)
-          val fullPath = bazelInfo.executionRoot.toNIO.resolve(selectedArtifact)
+          val fullPath = rebaseBinDir(
+            bazelInfo.executionRoot.toNIO,
+            bazelBin,
+            selectedArtifact
+          )
 
           if (Files.exists(fullPath) && !fullPath.startsWith(external)) {
             val possibleSourceJarsPaths = List(
@@ -337,6 +342,24 @@ object BloopBazel {
       if (inputs.nonEmpty) Some(target -> inputs)
       else None
     }.toMap
+  }
+
+  private def rebaseBinDir(
+      execRoot: Path,
+      binDir: Path,
+      pathStr: String
+  ): Path = {
+    val path = Paths.get(pathStr)
+    val length = path.getNameCount()
+    if (
+      length >= 4 && path.getName(0).toString == "bazel-out" && path
+        .getName(2)
+        .toString == "bin"
+    ) {
+      binDir.resolve(path.subpath(3, length))
+    } else {
+      execRoot.resolve(path)
+    }
   }
 
   private def maybeExcludeIJar(base: Path, path: String): String = {
