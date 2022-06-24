@@ -235,7 +235,8 @@ object BloopBazel {
           if (Files.exists(fullPath) && !fullPath.startsWith(external)) {
             val possibleSourceJarsPaths = List(
               withSuffix(fullPath, ".jar", "-src.jar"),
-              withSuffix(fullPath, ".jar", "_java-src.jar")
+              withSuffix(fullPath, ".jar", "_java-src.jar"),
+              withSuffix(fullPath, ".jar", ".srcjar")
             )
             possibleSourceJarsPaths.filter(Files.exists(_)).foreach {
               sourceJar =>
