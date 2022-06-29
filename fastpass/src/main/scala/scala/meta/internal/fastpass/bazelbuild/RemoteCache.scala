@@ -27,7 +27,7 @@ sealed trait RemoteCache {
   def writeToCache(filename: String)(op: OutputStream => Unit): Try[Boolean]
 }
 
-private class NoRemoteCache(reason: Throwable) extends RemoteCache {
+class NoRemoteCache(reason: Throwable) extends RemoteCache {
   override def getFromCache[T](filename: String)(op: InputStream => T): Try[T] =
     Failure(reason)
   override def writeToCache(

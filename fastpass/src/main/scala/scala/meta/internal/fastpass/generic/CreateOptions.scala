@@ -25,6 +25,10 @@ case class CreateOptions(
     )
     bazel: Boolean = false,
     @Description(
+      "Whether to ignore the remote export cache. Defaults to false."
+    )
+    ignoreCache: Boolean = false,
+    @Description(
       "Whether to exit after updating the remote cache. Defaults to false."
     )
     stopAfterCache: Boolean = false,

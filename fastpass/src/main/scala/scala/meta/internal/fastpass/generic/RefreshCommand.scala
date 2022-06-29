@@ -51,6 +51,7 @@ object RefreshCommand extends Command[RefreshOptions]("refresh") {
             refresh.common.workspace,
             refresh.common.bazelBinary,
             refresh.open.intellij,
+            refresh.ignoreCache,
             refresh.stopAfterCache,
             app
           )
