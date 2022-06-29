@@ -11,30 +11,6 @@ lazy val V = new {
   val xz = "1.9"
 }
 
-val MUnitFramework = new TestFramework("munit.Framework")
-
-val pantsCloneLocation = taskKey[File]("Location where to clone Pants")
-val pantsCloneUrl = taskKey[String]("URL from which to clone Pants")
-val pantsCloneBranch = taskKey[String]("Branch of Pants to clone")
-val pantsTestWorkspaceRoot =
-  taskKey[File]("Location from where to run pants in test")
-
-lazy val testSettings: Seq[Def.Setting[_]] = List(
-  Test / parallelExecution := false,
-  publish / skip := true,
-  fork := true,
-  libraryDependencies += "org.scalameta" %% "munit" % V.munit,
-  testFrameworks := List(MUnitFramework),
-  Test / testOptions ++= {
-    if (insideCI.value) {
-      // Enable verbose logging using sbt loggers in CI.
-      List(Tests.Argument(MUnitFramework, "+l", "--verbose"))
-    } else {
-      Nil
-    }
-  }
-)
-
 Global / onLoad ~= { old =>
   if (!scala.util.Properties.isWin) {
     import java.nio.file._
@@ -184,31 +160,6 @@ lazy val fastpass = project
         "-H:+ReportExceptionStackTraces"
       )
     }
-  )
-
-lazy val slow = project
-  .in(file("tests/slow"))
-  .enablePlugins(BuildInfoPlugin)
-  .dependsOn(fastpass)
-  .settings(
-    testSettings,
-    inConfig(Test)(
-      Seq(
-        pantsCloneLocation := target.value / "pants",
-        pantsCloneUrl := PantsRepo.url,
-        pantsCloneBranch := PantsRepo.branch,
-        pantsTestWorkspaceRoot := target.value / "pants-test",
-        buildInfoKeys := Seq[BuildInfoKey](
-          pantsCloneLocation,
-          pantsCloneUrl,
-          pantsCloneBranch,
-          pantsTestWorkspaceRoot,
-          insideCI
-        ),
-        buildInfoPackage := "tests.build"
-      )
-    ),
-    BuildInfoPlugin.buildInfoScopedSettings(Test)
   )
 
 lazy val benchmarks = project
