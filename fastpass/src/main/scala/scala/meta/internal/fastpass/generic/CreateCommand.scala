@@ -60,6 +60,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
           app.info(s"Project '$name' already exists; refreshing.")
           val refreshOptions = RefreshOptions(
             projects = name :: Nil,
+            ignoreCache = create.ignoreCache,
             stopAfterCache = create.stopAfterCache,
             export = create.export,
             open = create.open,
@@ -103,6 +104,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
                 create.common.workspace,
                 create.common.bazelBinary,
                 create.open.intellij,
+                create.ignoreCache,
                 create.stopAfterCache,
                 app
               )

@@ -13,6 +13,7 @@ import scala.util.Success
 import scala.util.Try
 
 import scala.meta.internal.fastpass.FileUtils
+import scala.meta.internal.fastpass.MessageOnlyException
 import scala.meta.internal.fastpass.bazelbuild.AnalysisProtosV2.Artifact
 import scala.meta.internal.fastpass.bazelbuild.Build.Attribute
 import scala.meta.internal.fastpass.bazelbuild.Build.Target
@@ -36,6 +37,7 @@ object BloopBazel {
       workspace: Path,
       bazelBinary: Path,
       intellij: Boolean,
+      ignoreCache: Boolean,
       stopAfterCache: Boolean,
       app: CliApp
   ): Try[Option[PantsExportResult]] = {
@@ -48,6 +50,7 @@ object BloopBazel {
         testFrameworksJars <- DependencyResolution.testingFrameworkJars
         bloopBazel <- getBloopBazel(
           app,
+          ignoreCache,
           project,
           bazel,
           bazelInfo,
@@ -63,13 +66,21 @@ object BloopBazel {
 
   private def getBloopBazel(
       app: CliApp,
+      ignoreCache: Boolean,
       project: Project,
       bazel: Bazel,
       bazelInfo: BazelInfo,
       scalaJars: List[Path],
       testFrameworksJars: List[Path]
   ): Try[BloopBazel] = {
-    val cache = RemoteCache.configure(bazel, project, CacheFormatVersion)
+    val cache =
+      if (ignoreCache) {
+        new NoRemoteCache(
+          new MessageOnlyException("Cache ignored with `--ignore-cache`")
+        )
+      } else {
+        RemoteCache.configure(bazel, project, CacheFormatVersion)
+      }
 
     cache
       .getFromCache(cachedExportName) { export =>
