@@ -176,15 +176,20 @@ class Bazel(bazelPath: Path, cwd: Path) {
       forbiddenGenerators: List[String]
   ): Try[List[Target]] = {
     val importableSpecs =
-      specs.map(spec =>
-        importableTargetsQuery(spec :: Nil, supportedRules, forbiddenGenerators)
-      )
-    val thirdPartyDeps = specs
-      .map(spec => s"""filter("@maven//:.+?[^j][^a][^r]$$", deps($spec))""")
-      .mkString(" + ")
-    val deps = importableSpecs.map(spec => s"""deps($spec)""").mkString(" + ")
-    val subs = importableSpecs.mkString(" - ")
-    val queryStr = s"kind(rule, $deps + $thirdPartyDeps - $subs)"
+      specs
+        .map(spec =>
+          importableTargetsQuery(
+            spec :: Nil,
+            supportedRules,
+            forbiddenGenerators
+          )
+        )
+        .mkString(" + ")
+    val queryStr = s"""let specs = ${specs.mkString(" + ")} in
+                      |let importableSpecs = $importableSpecs in
+                      |let dependencies = deps($$importableSpecs) in
+                      |let windowsOnly = attr(tags, "jvm_classifier=windows", $$dependencies) in
+                      |kind(rule, $$dependencies - $$windowsOnly - $$importableSpecs)""".stripMargin
     query("Computing dependencies", queryStr).map(getTargets)
   }
 

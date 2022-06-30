@@ -30,7 +30,7 @@ import metaconfig.cli.CliApp
 
 object BloopBazel {
 
-  final val CacheFormatVersion = "1"
+  final val CacheFormatVersion = "2"
 
   def run(
       project: Project,
