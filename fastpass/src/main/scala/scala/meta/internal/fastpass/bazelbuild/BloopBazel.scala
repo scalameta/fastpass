@@ -210,6 +210,7 @@ object BloopBazel {
       )
     }
     val bazelBin = bazelInfo.bazelBin.toNIO
+    val execRoot = bazelInfo.executionRoot.toNIO
     val external = bazelBin.resolve("external")
     val sourceJars = mutable.Buffer.empty[Path]
     val inputMapping = mutable.Map.empty[Artifact, Path]
@@ -236,7 +237,7 @@ object BloopBazel {
           // We swap those for the actual JARs in Bloop, because we will need those
           // to run the tests.
           val selectedArtifact =
-            maybeExcludeIJar(bazelInfo.executionRoot.toNIO, artifactPath)
+            maybeExcludeIJar(execRoot, artifactPath)
           val fullPath = rebaseBinDir(
             bazelInfo.executionRoot.toNIO,
             bazelBin,
@@ -251,7 +252,7 @@ object BloopBazel {
             )
             possibleSourceJarsPaths.filter(Files.exists(_)).foreach {
               sourceJar =>
-                val jarPath = bazelBin.relativize(sourceJar)
+                val jarPath = execRoot.relativize(sourceJar)
                 val mappedPath = dest.resolve(jarPath)
                 Files.createDirectories(mappedPath.getParent())
                 Files.copy(
