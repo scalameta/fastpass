@@ -2,11 +2,13 @@ package scala.meta.internal.fastpass.bazelbuild
 
 import java.io.File
 import java.io.OutputStream
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 import scala.util.Success
@@ -677,7 +679,7 @@ private class BloopBazel(
       sourcesGlobs = sourcesGlobs.map(globs =>
         List(globs.bloopConfig(project.common.workspace, projectDirectory))
       ),
-      sourceRoots = Some(List(projectDirectory)),
+      sourceRoots = approximateSourceRoot(projectDirectory).map(_ :: Nil),
       dependencies = deps,
       classpath = classpath(inputsMapping, target),
       out = targetDir.resolve("out").toNIO,
@@ -866,6 +868,27 @@ private class BloopBazel(
       attribute: String
   ): Option[Attribute] =
     target.getRule().getAttributeList().asScala.find(_.getName() == attribute)
+
+  private val sourceRootPattern = FileSystems.getDefault.getPathMatcher(
+    "glob:**/{main,test,tests,src,3rdparty,3rd_party,thirdparty,third_party}/{resources,scala,java,jvm,proto,python,protobuf,py}"
+  )
+  private val defaultTestRootPattern = FileSystems.getDefault.getPathMatcher(
+    "glob:**/{test,tests}"
+  )
+
+  private def approximateSourceRoot(dir: Path): Option[Path] = {
+    @tailrec def loop(d: Path): Option[Path] = {
+      if (sourceRootPattern.matches(d)) Some(d)
+      else if (defaultTestRootPattern.matches(d)) Some(d)
+      else {
+        Option(d.getParent) match {
+          case Some(parent) => loop(parent)
+          case None => None
+        }
+      }
+    }
+    loop(dir)
+  }
 }
 
 private case class CopiedJars(
