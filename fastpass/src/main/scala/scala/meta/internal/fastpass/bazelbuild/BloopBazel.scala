@@ -13,6 +13,7 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 import scala.util.Success
 import scala.util.Try
+import scala.util.control.NonFatal
 
 import scala.meta.internal.fastpass.FileUtils
 import scala.meta.internal.fastpass.MessageOnlyException
@@ -703,22 +704,31 @@ private class BloopBazel(
   ): Config.Project = {
     val directoryName = FileUtils.makeClassesDirFilename(name)
     val targetDir = BloopBazel.targetDirectory(project, name)
+    val workspace = bazelInfo.workspace.toNIO
+
+    // Try to create `.DS_Store` which will be used to have IntelliJ consider the directory
+    // as source root.
+    try Files.newOutputStream(directory.resolve(".DS_Store")).close()
+    catch { case NonFatal(_) => () }
+
     Config.Project(
       name = name,
       directory = directory,
-      workspaceDir = Some(bazelInfo.workspace.toNIO),
+      workspaceDir = Some(workspace),
       sources = Nil,
-      sourcesGlobs = None,
-      sourceRoots = None,
+      // NOTE(mduhem): Create and tell Bloop to consider as sources `.DS_Store` in the target root
+      // directory. Having at least a matching source is required for IntelliJ to consider the
+      // directory as content root.
+      sourcesGlobs = Some(
+        PantsGlobs(".DS_Store" :: Nil, Nil)
+          .bloopConfig(workspace, directory) :: Nil
+      ),
+      sourceRoots = Some(directory :: Nil),
       dependencies = Nil,
       classpath = Nil,
       out = targetDir.resolve("out").toNIO,
       classesDir = targetDir.resolve("classes").toNIO,
-      // NOTE(olafur): we generate a fake resource directory so that IntelliJ
-      // displays this directory in the "Project files tree" view. This needs to
-      // be a resource directory instead of a source directory to prevent Bloop
-      // from compiling it.
-      resources = Some(List(directory)),
+      resources = None,
       scala = None,
       java = None,
       sbt = None,
