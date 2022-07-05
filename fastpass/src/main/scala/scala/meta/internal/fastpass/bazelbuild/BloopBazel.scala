@@ -7,6 +7,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -694,7 +695,7 @@ private class BloopBazel(
       sbt = None,
       test = Some(test(target)),
       platform = Some(jvmPlatform),
-      resolution = Some(resolution(inputsMapping.sourceJars)),
+      resolution = resolution(inputsMapping.sourceJars),
       tags = Some(List(if (isTest(target)) Tag.Test else Tag.Library))
     )
   }
@@ -742,25 +743,31 @@ private class BloopBazel(
     )
   }
 
-  private def resolution(sourceJars: List[Path]): Config.Resolution = {
-    Config.Resolution(
-      sourceJars.map { jar =>
-        Config.Module(
-          organization = "",
-          name = "",
-          version = "",
-          configurations = None,
-          artifacts = List(
-            Config.Artifact(
+  private val producedResolution = new AtomicBoolean(false)
+  private def resolution(sourceJars: List[Path]): Option[Config.Resolution] = {
+    if (producedResolution.getAndSet(true)) None
+    else {
+      Some(
+        Config.Resolution(
+          sourceJars.map { jar =>
+            Config.Module(
+              organization = "",
               name = "",
-              classifier = Some("sources"),
-              checksum = None,
-              path = jar
+              version = "",
+              configurations = None,
+              artifacts = List(
+                Config.Artifact(
+                  name = "",
+                  classifier = Some("sources"),
+                  checksum = None,
+                  path = jar
+                )
+              )
             )
-          )
+          }
         )
-      }
-    )
+      )
+    }
   }
 
   private def test(target: Target) =
