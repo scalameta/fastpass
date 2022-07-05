@@ -491,7 +491,9 @@ private class BloopBazel(
       )
       projects <- assembleBloopProjects(inputsMapping)
       syntheticProjects = assembleSyntheticProjects(projects)
-      _ <- writeBloopConfigFiles(bloopDir, projects ++ syntheticProjects)
+      bloopFiles <-
+        writeBloopConfigFiles(bloopDir, projects ++ syntheticProjects)
+      _ = FileUtils.cleanStaleBloopFiles(bloopDir, bloopFiles.toSet)
     } yield Some(
       new PantsExportResult(
         projects.length + syntheticProjects.length,
@@ -544,12 +546,13 @@ private class BloopBazel(
   private def writeBloopConfigFiles(
       bloopDir: Path,
       projects: List[Config.Project]
-  ): Try[Unit] = {
-    ProgressConsole.foreach("Writing Bloop configuration files", projects) {
+  ): Try[List[Path]] = {
+    ProgressConsole.map("Writing Bloop configuration files", projects) {
       project =>
         val file = Config.File("1.5.0", project)
         val out = bloopDir.resolve(FileUtils.makeJsonFilename(project.name))
         bloop.config.write(file, out)
+        out
     }
   }
 

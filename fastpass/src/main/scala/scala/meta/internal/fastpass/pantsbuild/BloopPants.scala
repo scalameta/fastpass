@@ -262,7 +262,7 @@ private class BloopPants(
       bloop.config.write(json, out)
       generatedProjects += out
     }
-    cleanStaleBloopFiles(generatedProjects)
+    FileUtils.cleanStaleBloopFiles(bloopDir, generatedProjects)
     token.checkCanceled()
     new PantsExportResult(
       generatedProjects.size,
@@ -731,20 +731,5 @@ private class BloopPants(
       module.startsWith("org.scala-lang:scala-compiler:") ||
       module.startsWith("org.fursesource:jansi:") ||
       module.startsWith("jline:jline:")
-
-  private def cleanStaleBloopFiles(
-      generatedProjects: collection.Set[Path]
-  ): Unit = {
-    val jsonPattern = FileSystems.getDefault().getPathMatcher("glob:**/*.json")
-    AbsolutePath(bloopDir).list
-      .filter { path =>
-        // Re-implementation of https://github.com/scalacenter/bloop/blob/e014760490bf140e2755eb91260bdaf9a75e4476/integrations/sbt-bloop/src/main/scala/bloop/integrations/sbt/SbtBloop.scala#L1064-L1079
-        path.isFile &&
-        jsonPattern.matches(path.toNIO) &&
-        path.filename != "bloop.settings.json" &&
-        !generatedProjects(path.toNIO)
-      }
-      .foreach { path => Files.deleteIfExists(path.toNIO) }
-  }
 
 }

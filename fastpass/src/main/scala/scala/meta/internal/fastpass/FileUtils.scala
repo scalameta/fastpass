@@ -3,10 +3,14 @@ package scala.meta.internal.fastpass
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.PrintStream
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 
 import scala.annotation.switch
+
+import scala.meta.internal.fastpass.FastpassEnrichments.XtensionAbsolutePath
+import scala.meta.io.AbsolutePath
 
 object FileUtils {
   def withTempFile[T](op: Path => T): T = {
@@ -59,6 +63,22 @@ object FileUtils {
     // Prepend "z_" to separate it from the JSON files when listing the
     // `.bloop/` directory.
     "z_" + MD5.compute(target).take(12)
+  }
+
+  def cleanStaleBloopFiles(
+      bloopDir: Path,
+      generatedProjects: collection.Set[Path]
+  ): Unit = {
+    val jsonPattern = FileSystems.getDefault().getPathMatcher("glob:**/*.json")
+    AbsolutePath(bloopDir).list
+      .filter { path =>
+        // Re-implementation of https://github.com/scalacenter/bloop/blob/e014760490bf140e2755eb91260bdaf9a75e4476/integrations/sbt-bloop/src/main/scala/bloop/integrations/sbt/SbtBloop.scala#L1064-L1079
+        path.isFile &&
+        jsonPattern.matches(path.toNIO) &&
+        path.filename != "bloop.settings.json" &&
+        !generatedProjects(path.toNIO)
+      }
+      .foreach { path => Files.deleteIfExists(path.toNIO) }
   }
 
   object NullOutputStream extends OutputStream {
