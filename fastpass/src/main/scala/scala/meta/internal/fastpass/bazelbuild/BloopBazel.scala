@@ -670,7 +670,7 @@ private class BloopBazel(
     )
     val jvmPlatform = Config.Platform.Jvm(
       jvmConfig,
-      mainClass = None,
+      mainClass = mainClass(target),
       runtimeConfig = None,
       classpath = Some(runtimeClasspath(inputsMapping, target)),
       resources = None
@@ -810,6 +810,12 @@ private class BloopBazel(
         )
       )
     )
+  }
+
+  private def mainClass(target: Target): Option[String] = {
+    getAttribute(target, "main_class")
+      .map(_.getStringValue())
+      .filter(_.nonEmpty)
   }
 
   private val rawOutputToTarget: Map[Artifact, Target] = {
