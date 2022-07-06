@@ -410,12 +410,13 @@ object BloopBazel {
     "_java_library" -> Set("Scalac", "Javac"),
     "_scala_macro_library" -> Set("Scalac"),
     "scala_junit_test" -> Set("Scalac", "Javac"),
-    "scala_binary" -> Set("Middleman")
+    "scala_binary" -> Set("Middleman"),
+    "_jvm_app" -> Set()
   )
 
-  private val forbiddenGenerators: List[String] = List(
-    "create_datasets",
-    "antlr"
+  private val forbiddenGenerators: Map[String, List[String]] = Map(
+    "" -> List("create_datasets", "antlr"),
+    "scala_library" -> List("jvm_app")
   )
 
   private val cachedExportName: String = "fastpass-export.json"
@@ -607,41 +608,60 @@ private class BloopBazel(
       .get
 
   private def dependencies(target: Target): List[Target] =
-    targetDependencies.get(target).getOrElse(Nil)
+    target match {
+      // jvm_app targets depend only on the binary they wrap.
+      case JvmApp(_, bin) => bin :: Nil
+      case _ => targetDependencies.get(target).getOrElse(Nil)
+    }
 
   private def classpath(
       inputsMapping: CopiedJars,
       target: Target
-  ): List[Path] = {
-    val inputs = rawTargetInputs.getOrElse(target, Nil)
-    inputs
-      .flatMap(inputsMapping.artifactToPath.get)
-      .distinct
-      .filterNot(_.getFileName().toString.endsWith("-mval.jar"))
-  }
+  ): List[Path] =
+    target match {
+      // jvm_app targets have no sources to compile; their compile classpath can be empty.
+      case JvmApp(_, bin) =>
+        Nil
+      case _ =>
+        val inputs = rawTargetInputs.getOrElse(target, Nil)
+        inputs
+          .flatMap(inputsMapping.artifactToPath.get)
+          .distinct
+          .filterNot(_.getFileName().toString.endsWith("-mval.jar"))
+    }
 
   private def runtimeClasspath(
       inputsMapping: CopiedJars,
       target: Target
-  ): List[Path] = {
-    val inputs = rawRuntimeTargetInputs.getOrElse(
-      target,
-      rawTargetInputs.getOrElse(target, Nil)
-    )
-    val entries = inputs.flatMap(inputsMapping.artifactToPath.get).distinct
-    if (isTest(target)) entries ++ testFrameworksJars
-    else entries
-  }
-
-  private def javaOptions(target: Target): List[String] = {
-    getAttribute(target, "jvm_flags") match {
-      case Some(attr) =>
-        val flags = attr.getStringListValueList().asScala.toList
-        s"-Duser.dir=${bazelInfo.workspace}" :: flags
-      case None =>
-        Nil
+  ): List[Path] =
+    target match {
+      // jvm_app targets use the same runtime classpath as the scala_binary they wrap.
+      case JvmApp(_, bin) =>
+        runtimeClasspath(inputsMapping, bin)
+      case _ =>
+        val inputs = rawRuntimeTargetInputs.getOrElse(
+          target,
+          rawTargetInputs.getOrElse(target, Nil)
+        )
+        val entries = inputs.flatMap(inputsMapping.artifactToPath.get).distinct
+        if (isTest(target)) entries ++ testFrameworksJars
+        else entries
     }
-  }
+
+  private def javaOptions(target: Target): List[String] =
+    target match {
+      // jvm_app targets are run with the java options of the binary they wrap.
+      case JvmApp(_, bin) =>
+        javaOptions(bin)
+      case _ =>
+        getAttribute(target, "jvm_flags") match {
+          case Some(attr) =>
+            val flags = attr.getStringListValueList().asScala.toList
+            s"-Duser.dir=${bazelInfo.workspace}" :: flags
+          case None =>
+            Nil
+        }
+    }
 
   private def bloopProject(
       inputsMapping: CopiedJars,
@@ -844,11 +864,15 @@ private class BloopBazel(
     )
   }
 
-  private def mainClass(target: Target): Option[String] = {
-    getAttribute(target, "main_class")
-      .map(_.getStringValue())
-      .filter(_.nonEmpty)
-  }
+  private def mainClass(target: Target): Option[String] =
+    target match {
+      case JvmApp(_, bin) =>
+        mainClass(bin)
+      case _ =>
+        getAttribute(target, "main_class")
+          .map(_.getStringValue())
+          .filter(_.nonEmpty)
+    }
 
   private val rawOutputToTarget: Map[Artifact, Target] = {
     val mappings =
@@ -870,6 +894,13 @@ private class BloopBazel(
             .filterNot(_ == target)
             .distinct
       }
+    }.toMap
+  }
+
+  private val scalaBinaryTargets: Map[String, Target] = {
+    importedTargets.collect {
+      case target if target.getRule().getRuleClass() == "scala_binary" =>
+        target.getRule().getName() -> target
     }.toMap
   }
 
@@ -947,6 +978,18 @@ private class BloopBazel(
     }
     loop(dir)
   }
+
+  private object JvmApp {
+    def unapply(target: Target): Option[(Target, Target)] = {
+      if (target.getRule().getRuleClass() != "_jvm_app") None
+      else
+        for {
+          binaryLabel <- getAttribute(target, "binary")
+          binaryTarget <- scalaBinaryTargets.get(binaryLabel.getStringValue())
+        } yield (target, binaryTarget)
+    }
+  }
+
 }
 
 private case class CopiedJars(
