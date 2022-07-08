@@ -28,43 +28,44 @@ object RefreshCommand extends Command[RefreshOptions]("refresh") {
   ): List[TabCompletionItem] =
     SharedCommand.complete(context, allowsMultipleProjects = true)
   def run(refresh: RefreshOptions, app: CliApp): Int = {
-    val existingProjects = Project.fromCommon(refresh.common)
-    refresh.projects.map { projectName =>
-      val timer = new Timer(Time.system)
-      existingProjects.find(_.matchesName(projectName)) match {
-        case None =>
-          SharedCommand.noSuchProject(projectName, app, refresh.common)
-        case Some(project) if project.importMode == ImportMode.Pants =>
-          val installResult = PantsRefresh.run(refresh, project, app)
-          SharedCommand.postExportActions(
-            app,
-            project,
-            refresh.export,
-            refresh.open,
-            ImportMode.Pants,
-            timer,
-            installResult
-          )
-        case Some(project) if project.importMode == ImportMode.Bazel =>
-          val installResult = BloopBazel.run(
-            project,
-            refresh.common.workspace,
-            refresh.common.bazelBinary,
-            refresh.open.intellij,
-            refresh.ignoreCache,
-            refresh.stopAfterCache,
-            app
-          )
-          SharedCommand.postExportActions(
-            app,
-            project,
-            refresh.export,
-            refresh.open,
-            ImportMode.Bazel,
-            timer,
-            installResult
-          )
-      }
-    }.sum
+    SharedCommand.withAtLeastOneProject(
+      "refresh",
+      refresh.projects,
+      refresh.common,
+      app
+    ) {
+      case project if project.importMode == ImportMode.Pants =>
+        val timer = new Timer(Time.system)
+        val installResult = PantsRefresh.run(refresh, project, app)
+        SharedCommand.postExportActions(
+          app,
+          project,
+          refresh.export,
+          refresh.open,
+          ImportMode.Pants,
+          timer,
+          installResult
+        )
+      case project if project.importMode == ImportMode.Bazel =>
+        val timer = new Timer(Time.system)
+        val installResult = BloopBazel.run(
+          project,
+          refresh.common.workspace,
+          refresh.common.bazelBinary,
+          refresh.open.intellij,
+          refresh.ignoreCache,
+          refresh.stopAfterCache,
+          app
+        )
+        SharedCommand.postExportActions(
+          app,
+          project,
+          refresh.export,
+          refresh.open,
+          ImportMode.Bazel,
+          timer,
+          installResult
+        )
+    }
   }
 }
