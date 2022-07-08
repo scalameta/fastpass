@@ -492,13 +492,11 @@ private class BloopBazel(
         rawRuntimeTargetInputs
       )
       projects <- assembleBloopProjects(inputsMapping)
-      syntheticProjects = assembleSyntheticProjects(projects)
-      bloopFiles <-
-        writeBloopConfigFiles(bloopDir, projects ++ syntheticProjects)
+      bloopFiles <- writeBloopConfigFiles(bloopDir, projects)
       _ = FileUtils.cleanStaleBloopFiles(bloopDir, bloopFiles.toSet)
     } yield Some(
       new PantsExportResult(
-        projects.length + syntheticProjects.length,
+        projects.length,
         Map.empty,
         None,
         Iterator.empty
@@ -506,43 +504,60 @@ private class BloopBazel(
     )
   }
 
-  private def assembleSyntheticProjects(
-      projects: List[Config.Project]
-  ): List[Config.Project] = {
-    val sourceRoots = BloopBazel.sourceRoots(
-      bazelInfo.workspace,
-      project.targets,
-      importedTargets.map(_.getRule.getName)
-    )
-    def isEmptyGlobs(globsOpt: Option[List[Config.SourcesGlobs]]): Boolean =
-      globsOpt match {
-        case None => true
-        case Some(globs) => globs.forall(_.includes.isEmpty)
-      }
-    val isBaseDirectory =
-      projects
-        .filterNot(project => isEmptyGlobs(project.sourcesGlobs))
-        .map(_.directory)
-        .toSet
-    sourceRoots.flatMap { root =>
-      if (isBaseDirectory(root.toNIO)) Nil
-      else {
-        val name = root
-          .toRelative(bazelInfo.workspace)
-          .toURI(isDirectory = false)
-          .toString()
-        List(emptyBloopProject(name + "-project-root", root.toNIO))
-      }
-    }
-  }
-
   private def assembleBloopProjects(
       inputsMapping: CopiedJars
   ): Try[List[Config.Project]] = {
-    ProgressConsole.map(
-      "Assembling Bloop configurations",
-      importedTargets
-    )(bloopProject(inputsMapping, _))
+    ProgressConsole
+      .map(
+        "Assembling Bloop configurations",
+        importedTargets
+      )(bloopProject(inputsMapping, _))
+      .map { organicProjects =>
+        val sourceRoots = BloopBazel.sourceRoots(
+          bazelInfo.workspace,
+          project.targets,
+          importedTargets.map(_.getRule.getName)
+        )
+        def isEmptyGlobs(globsOpt: Option[List[Config.SourcesGlobs]]): Boolean =
+          globsOpt match {
+            case None => true
+            case Some(globs) => globs.forall(_.includes.isEmpty)
+          }
+
+        val sourceRootToProjects =
+          organicProjects.groupBy(p => AbsolutePath(p.directory))
+
+        // For source roots where no project live, create synthetic projects
+        // that will act as source root so that targets under a same source
+        // root are grouped together.
+        val syntheticProjects =
+          sourceRoots.filter(r => !sourceRootToProjects.contains(r)).map {
+            root =>
+              // NOTE(olafur): cannot be `name + "-root"` since that conflicts with the
+              // IntelliJ-generated root project.
+              val syntheticProjectName =
+                root
+                  .toRelative(bazelInfo.workspace)
+                  .toURI(isDirectory = false)
+                  .toString() + "-project-root"
+              emptyBloopProject(syntheticProjectName, root.toNIO)
+          }
+
+        // For projects that live on source roots, if the project has only
+        // empty source globs (eg. `jvm_bin` targets), add the "DS_Store
+        // workaround", so that at least one source is matched and the project
+        // acts as source root.
+        val projectsWithDsStoreWorkaround = sourceRootToProjects.flatMap {
+          case (root, projects @ fst :: rest)
+              if sourceRoots.contains(root) && projects
+                .forall(p => isEmptyGlobs(p.sourcesGlobs)) =>
+            addDsStoreWorkaround(fst) :: rest
+          case (_, projects) =>
+            projects
+        }
+
+        syntheticProjects ++ projectsWithDsStoreWorkaround
+      }
   }
 
   private def writeBloopConfigFiles(
@@ -706,27 +721,14 @@ private class BloopBazel(
       name: String,
       directory: Path
   ): Config.Project = {
-    val directoryName = FileUtils.makeClassesDirFilename(name)
     val targetDir = BloopBazel.targetDirectory(project, name)
-    val workspace = bazelInfo.workspace.toNIO
 
-    // Try to create `.DS_Store` which will be used to have IntelliJ consider the directory
-    // as source root.
-    try Files.newOutputStream(directory.resolve(".DS_Store")).close()
-    catch { case NonFatal(_) => () }
-
-    Config.Project(
+    val emptyProject = Config.Project(
       name = name,
       directory = directory,
-      workspaceDir = Some(workspace),
+      workspaceDir = Some(bazelInfo.workspace.toNIO),
       sources = Nil,
-      // NOTE(mduhem): Create and tell Bloop to consider as sources `.DS_Store` in the target root
-      // directory. Having at least a matching source is required for IntelliJ to consider the
-      // directory as content root.
-      sourcesGlobs = Some(
-        PantsGlobs(".DS_Store" :: Nil, Nil)
-          .bloopConfig(workspace, directory) :: Nil
-      ),
+      sourcesGlobs = None,
       sourceRoots = Some(directory :: Nil),
       dependencies = Nil,
       classpath = Nil,
@@ -740,6 +742,27 @@ private class BloopBazel(
       platform = None,
       resolution = None,
       tags = None
+    )
+
+    addDsStoreWorkaround(emptyProject)
+  }
+
+  private def addDsStoreWorkaround(project: Config.Project): Config.Project = {
+    // Try to create `.DS_Store` which will be used to have IntelliJ consider the directory
+    // as source root.
+    try Files.newOutputStream(project.directory.resolve(".DS_Store")).close()
+    catch { case NonFatal(_) => () }
+
+    project.copy(
+      // NOTE(mduhem): Create and tell Bloop to consider as sources `.DS_Store` in the target root
+      // directory. Having at least a matching source is required for IntelliJ to consider the
+      // directory as content root.
+      sourcesGlobs = Some(
+        PantsGlobs(".DS_Store" :: Nil, Nil).bloopConfig(
+          bazelInfo.workspace.toNIO,
+          project.directory
+        ) :: project.sourcesGlobs.getOrElse(Nil)
+      )
     )
   }
 
