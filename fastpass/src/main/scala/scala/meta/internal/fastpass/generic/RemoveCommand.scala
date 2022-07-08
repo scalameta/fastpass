@@ -19,17 +19,15 @@ object RemoveCommand extends Command[RemoveOptions]("remove") {
   ): List[TabCompletionItem] =
     SharedCommand.complete(context, allowsMultipleProjects = true)
   def run(remove: RemoveOptions, app: CliApp): Int = {
-    val errors: List[Int] = remove.projects.map { name =>
-      Project.fromName(name, remove.common) match {
-        case Some(value) =>
-          app.info(s"removing directory '${value.root.bspRoot}'")
-          RecursivelyDelete(value.root.bspRoot)
-          0
-        case None =>
-          app.error(s"project '$name' does not exist")
-          1
-      }
+    SharedCommand.withAtLeastOneProject(
+      "remove",
+      remove.projects,
+      remove.common,
+      app
+    ) { project =>
+      app.info(s"removing directory '${project.root.bspRoot}'")
+      RecursivelyDelete(project.root.bspRoot)
+      0
     }
-    errors.sum
   }
 }

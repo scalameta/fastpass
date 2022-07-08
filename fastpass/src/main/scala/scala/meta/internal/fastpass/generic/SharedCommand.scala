@@ -119,8 +119,13 @@ object SharedCommand {
   )(fn: Project => Int): Int =
     projects match {
       case Nil =>
-        app.error(s"no projects to $action")
-        1
+        Project.current(common) match {
+          case None =>
+            app.error(s"no projects to $action")
+            1
+          case Some(project) =>
+            fn(project)
+        }
       case name :: Nil =>
         Project.fromName(name, common) match {
           case Some(project) =>
@@ -133,6 +138,24 @@ object SharedCommand {
           s"expected 1 project to $action but received ${projects.length} arguments '${projects.mkString(" ")}'"
         )
         1
+    }
+
+  def withAtLeastOneProject(
+      action: String,
+      projects: List[String],
+      common: SharedOptions,
+      app: CliApp
+  )(fn: Project => Int): Int =
+    if (projects.isEmpty) withOneProject(action, Nil, common, app)(fn)
+    else {
+      projects.map { name =>
+        Project.fromName(name, common) match {
+          case None =>
+            SharedCommand.noSuchProject(name, app, common)
+          case Some(project) =>
+            fn(project)
+        }
+      }.sum
     }
 
   def noSuchProject(name: String, app: CliApp, common: SharedOptions): Int = {
