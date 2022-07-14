@@ -407,9 +407,9 @@ object BloopBazel {
 
   private val supportedRules: Map[String, Set[String]] = Map(
     "scala_library" -> Set("Scalac"),
-    "_java_library" -> Set("Scalac"),
+    "_java_library" -> Set("Scalac", "Javac"),
     "_scala_macro_library" -> Set("Scalac"),
-    "scala_junit_test" -> Set("Scalac"),
+    "scala_junit_test" -> Set("Scalac", "Javac"),
     "scala_binary" -> Set("Middleman")
   )
 
@@ -690,6 +690,13 @@ private class BloopBazel(
       classpath = Some(runtimeClasspath(inputsMapping, target)),
       resources = None
     )
+    val cp = classpath(inputsMapping, target)
+
+    // Fork the compilation to avoid running out of file descriptors
+    // in very large classpaths.
+    // This should not be necessary anymore when our Bazel rules will
+    // observe `strict_deps`.
+    val forceFork = cp.length > 2000
 
     Config.Project(
       name = projectName,
@@ -701,12 +708,12 @@ private class BloopBazel(
       ),
       sourceRoots = approximateSourceRoot(projectDirectory).map(_ :: Nil),
       dependencies = deps,
-      classpath = classpath(inputsMapping, target),
+      classpath = cp,
       out = targetDir.resolve("out").toNIO,
       classesDir = targetDir.resolve("classes").toNIO,
       resources = resources,
       `scala` = scala(target),
-      java = Some(java(target)),
+      java = Some(java(target, forceFork)),
       sbt = None,
       test = Some(test(target)),
       platform = Some(jvmPlatform),
@@ -803,9 +810,11 @@ private class BloopBazel(
       options = Config.TestOptions.empty
     )
 
-  private def java(target: Target) =
+  private def java(target: Target, forceFork: Boolean) =
+    // Passing flags for the runtime system (`-J`) will cause Bloop to fork
+    // Java compilation.
     Config.Java(
-      options = Nil
+      options = if (forceFork) List("-J-Dbloop.force.fork=fork") else Nil
     )
 
   private def scala(target: Target): Option[Config.Scala] = {
