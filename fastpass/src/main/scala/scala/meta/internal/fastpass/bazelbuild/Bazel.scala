@@ -137,7 +137,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
   def targetsInfos(
       specs: List[String],
       supportedRules: List[String],
-      forbiddenGenerators: List[String]
+      forbiddenGenerators: Map[String, List[String]]
   ): Try[List[Target]] = {
     val queryStr =
       importableTargetsQuery(specs, supportedRules, forbiddenGenerators)
@@ -147,7 +147,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
   def dependenciesToBuild(
       specs: List[String],
       supportedRules: List[String],
-      forbiddenGenerators: List[String]
+      forbiddenGenerators: Map[String, List[String]]
   ): Try[List[String]] = {
     importDependencies(specs, supportedRules, forbiddenGenerators).map {
       targets =>
@@ -173,7 +173,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
   private def importDependencies(
       specs: List[String],
       supportedRules: List[String],
-      forbiddenGenerators: List[String]
+      forbiddenGenerators: Map[String, List[String]]
   ): Try[List[Target]] = {
     val importableSpecs =
       specs
@@ -196,14 +196,29 @@ class Bazel(bazelPath: Path, cwd: Path) {
   private def importableTargetsQuery(
       specs: List[String],
       supportedRules: List[String],
-      forbiddenGenerators: List[String]
+      forbiddenGenerators: Map[String, List[String]]
   ): String = {
     val targets = specs.mkString(" + ")
     val pattern = supportedRules.mkString("|")
     val baseQuery = s"""kind("^($pattern)", $targets)"""
-    s"""($baseQuery - attr(generator_function, "${forbiddenGenerators.mkString(
-      "|"
-    )}", $baseQuery))"""
+    val excludedGenerators = forbiddenGenerators.foldLeft(List.empty[String]) {
+      case (acc, ("", generators)) =>
+        s"""attr(generator_function, "${generators.mkString(
+          "|"
+        )}", $$baseQuery)""" :: acc
+      case (acc, (rule, generators)) =>
+        s"""attr(generator_function, "${generators.mkString(
+          "|"
+        )}", kind($rule, $$baseQuery))""".stripMargin :: acc
+    }
+
+    excludedGenerators match {
+      case Nil =>
+        baseQuery
+      case generators =>
+        s"""let baseQuery = $baseQuery in
+           |($baseQuery - ${generators.mkString(" - ")})""".stripMargin
+    }
   }
 
   private def getTargets(result: QueryResult): List[Target] = {
