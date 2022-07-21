@@ -185,8 +185,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
           )
         )
         .mkString(" + ")
-    val queryStr = s"""let specs = ${specs.mkString(" + ")} in
-                      |let importableSpecs = $importableSpecs in
+    val queryStr = s"""let importableSpecs = $importableSpecs in
                       |let dependencies = deps($$importableSpecs) in
                       |let windowsOnly = attr(tags, "jvm_classifier=windows", $$dependencies) in
                       |kind(rule, $$dependencies - $$windowsOnly - $$importableSpecs)""".stripMargin
@@ -217,7 +216,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
         baseQuery
       case generators =>
         s"""let baseQuery = $baseQuery in
-           |($baseQuery - ${generators.mkString(" - ")})""".stripMargin
+           |($$baseQuery - ${generators.mkString(" - ")})""".stripMargin
     }
   }
 
