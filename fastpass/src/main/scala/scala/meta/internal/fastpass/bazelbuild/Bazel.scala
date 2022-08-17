@@ -226,6 +226,9 @@ class Bazel(bazelPath: Path, cwd: Path) {
       .asScala
       .toList
       .filterNot(_.getRule().getName().endsWith(".semanticdb"))
+      .filterNot(_.getRule().getName().endsWith(".deployjar"))
+      .filterNot(_.getRule().getName().endsWith(".dirbundle"))
+      .filterNot(_.getRule().getRuleClass().equals("alias"))
   }
 
   def sourcesGlobs(
