@@ -221,13 +221,21 @@ class Bazel(bazelPath: Path, cwd: Path) {
   }
 
   private def getTargets(result: QueryResult): List[Target] = {
+    val extToExclude = List(
+      ".semanticdb",
+      ".deployjar",
+      ".dirbundle",
+      ".dataconfig",
+      ".dataconfigjar"
+    )
+
     result
       .getTargetList()
       .asScala
       .toList
-      .filterNot(_.getRule().getName().endsWith(".semanticdb"))
-      .filterNot(_.getRule().getName().endsWith(".deployjar"))
-      .filterNot(_.getRule().getName().endsWith(".dirbundle"))
+      .filterNot(p =>
+        extToExclude.exists(e => p.getRule().getName().endsWith(e))
+      )
       .filterNot(_.getRule().getRuleClass().equals("alias"))
   }
 
