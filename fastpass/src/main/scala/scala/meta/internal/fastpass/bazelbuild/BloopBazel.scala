@@ -257,7 +257,11 @@ object BloopBazel {
             possibleSourceJarsPaths.filter(Files.exists(_)).foreach {
               sourceJar =>
                 val jarPath = execRoot.relativize(sourceJar)
-                val mappedPath = dest.resolve(jarPath)
+                // IntelliJ will not consider `.srcjar`s as source jars. We change the suffix to `-sources.jar`.
+                val mappedPath =
+                  if (jarPath.getFileName.toString.endsWith(".srcjar"))
+                    withSuffix(dest.resolve(jarPath), ".srcjar", "-sources.jar")
+                  else dest.resolve(jarPath)
                 Files.createDirectories(mappedPath.getParent())
                 Files.copy(
                   sourceJar,
