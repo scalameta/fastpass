@@ -186,6 +186,7 @@ object IntelliJ {
       case (default, sources) =>
         libraries(default.toString()) = Str(sources.toString())
     }
-    project.root.pantsLibrariesJson.writeText(ujson.write(libraries, indent = 4))
+    project.root.pantsLibrariesJson
+      .writeText(ujson.write(libraries, indent = 4))
   }
 }
