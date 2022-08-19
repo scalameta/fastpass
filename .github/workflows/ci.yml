@@ -30,8 +30,6 @@ jobs:
         with:
           version: '3.9.1'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - run: brew uninstall --ignore-dependencies python@3.9 python@3.8
-        if: matrix.os == 'macOS-latest'
       - uses: actions/setup-python@v3
         with:
           python-version: '3.8'
