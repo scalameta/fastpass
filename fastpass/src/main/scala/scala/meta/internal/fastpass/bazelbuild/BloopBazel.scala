@@ -411,9 +411,9 @@ object BloopBazel {
 
   private val supportedRules: Map[String, Set[String]] = Map(
     "scala_library" -> Set("Scalac"),
-    "_java_library" -> Set("Scalac", "Javac"),
+    "_java_library" -> Set("Scalac"),
     "_scala_macro_library" -> Set("Scalac"),
-    "scala_junit_test" -> Set("Scalac", "Javac"),
+    "scala_junit_test" -> Set("Scalac"),
     "scala_binary" -> Set("Middleman"),
     "_jvm_app" -> Set()
   )
