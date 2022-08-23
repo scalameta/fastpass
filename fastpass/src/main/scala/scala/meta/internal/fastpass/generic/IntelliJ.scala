@@ -121,8 +121,8 @@ object IntelliJ {
       project.common.workspace.toString,
       "--no-bloop-exit"
     ) ++
-      shared.pantsPath
-        .map(path => List("--pantsPath", path.toString))
+      shared.pants
+        .map(path => List("--pants", path.toString))
         .getOrElse(List.empty) :+
       project.name
 

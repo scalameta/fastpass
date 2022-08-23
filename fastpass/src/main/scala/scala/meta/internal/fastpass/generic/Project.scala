@@ -33,7 +33,7 @@ case class Project(
   ): Boolean = {
     val optionsName =
       PantsConfiguration.outputFilename(options.name.getOrElse(name))
-    val optionsIsPants = options.pants
+    val optionsIsPants = options.forcePants
     val existingIsPants = importMode == ImportMode.Pants
     targets.sorted == options.targets.sorted &&
     optionsIsPants == existingIsPants &&

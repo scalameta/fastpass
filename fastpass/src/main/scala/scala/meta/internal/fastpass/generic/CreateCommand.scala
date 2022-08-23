@@ -6,7 +6,6 @@ import java.nio.file.Files
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.Time
 import scala.meta.internal.fastpass.Timer
-import scala.meta.internal.fastpass.bazelbuild.Bazel
 import scala.meta.internal.fastpass.bazelbuild.BloopBazel
 import scala.meta.internal.fastpass.pantsbuild.Export
 import scala.meta.internal.fastpass.pantsbuild.commands.SharedPantsCommand
@@ -31,8 +30,8 @@ object CreateCommand extends Command[CreateOptions]("create") {
       Doc.line,
       List(
         "# Create project with custom name from two Pants targets",
-        "fastpass create --pants --name PROJECT_NAME TARGETS1:: TARGETS2::", "",
-        "# Create project with an auto-generated name with Bazel",
+        "fastpass create --force-pants --name PROJECT_NAME TARGETS1:: TARGETS2::",
+        "", "# Create project with an auto-generated name with Bazel",
         "fastpass create --name PROJECT_NAME TARGETS1/... TARGETS2/...",
         "# Create project with an auto-generated name, infer Pants",
         "fastpass create --name PROJECT_NAME TARGETS1:: TARGETS2::", "",
@@ -43,7 +42,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
   override def complete(
       context: TabCompletionContext
   ): List[TabCompletionItem] = {
-    val isPants = context.arguments.contains("--pants")
+    val isPants = context.arguments.contains("--force-pants")
     context.setting match {
       case None =>
         completeTargetSpec(context, PathIO.workingDirectory, isPants)
@@ -82,7 +81,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
 
       case None =>
         val importMode =
-          if (create.pants) ImportMode.Pants else ImportMode.Bazel
+          if (create.forcePants) ImportMode.Pants else ImportMode.Bazel
         val project = Project.create(
           name,
           create.common,
@@ -129,7 +128,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
 
     // If we find a recursive glob of targets, then we know it's a pants import
     val isPants =
-      create.pants || create.targets.exists(tgt => tgt.endsWith("::"))
+      create.forcePants || create.targets.exists(tgt => tgt.endsWith("::"))
 
     if (isPants) {
       val targets = create.targets.map { target =>
@@ -143,7 +142,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
         } else target
       }
 
-      create.copy(pants = true, targets = targets)
+      create.copy(bazel = false, forcePants = true, targets = targets)
     } else {
       create
     }

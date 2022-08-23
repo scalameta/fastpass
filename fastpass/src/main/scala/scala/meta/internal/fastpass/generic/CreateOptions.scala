@@ -21,9 +21,13 @@ case class CreateOptions(
     )
     name: Option[String] = None,
     @Description(
+      "Whether to use Bazel for project import. Inferred from target specs."
+    )
+    bazel: Boolean = true,
+    @Description(
       "Whether to use Pants for project import. Inferred from target specs."
     )
-    pants: Boolean = false,
+    forcePants: Boolean = false,
     @Description(
       "Whether to ignore the remote export cache. Defaults to false."
     )
