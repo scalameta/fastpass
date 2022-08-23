@@ -834,12 +834,30 @@ private class BloopBazel(
       options = Config.TestOptions.empty
     )
 
-  private def java(target: Target, forceFork: Boolean) =
+  private def java(target: Target, forceFork: Boolean) = {
+    val baseOptions = List(
+      // Default to `-implicit:none` but allow user to override, to mimic Bazel's behavior.
+      // See https://github.com/bazelbuild/bazel/blob/e51a15f4395d4223c9665e5cc8ae2c8dd29e8f20/src/java_tools/buildjar/java/com/google/devtools/build/buildjar/JavaLibraryBuildRequest.java#L409-L410
+      "-implicit:none"
+    )
+
+    val userOptions = getAttribute(target, "javacopts")
+      .map(_.getStringListValueList().asScala.toList)
+      .getOrElse(Nil)
+      // Filter out ErrorProne (https://errorprone.info) flags for now, since we don't have the plugin.
+      .filterNot(_.startsWith("-Xep"))
+      // Filter out Bazel specific options
+      .filterNot(_.startsWith("-Werror:"))
+
     // Passing flags for the runtime system (`-J`) will cause Bloop to fork
     // Java compilation.
+    val forkOptions =
+      if (forceFork) List("-J-Dbloop.force.fork=fork") else Nil
+
     Config.Java(
-      options = if (forceFork) List("-J-Dbloop.force.fork=fork") else Nil
+      options = baseOptions ++ userOptions ++ forkOptions
     )
+  }
 
   private def scala(target: Target): Option[Config.Scala] = {
     val options = getAttribute(target, "scalacopts").map(
