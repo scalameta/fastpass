@@ -9,7 +9,7 @@ object ProgressUpdate {
       finished: Long,
       total: Long
   ) extends ProgressUpdate {
-    val progress: Double = finished.toDouble / total
+    val progress: Double = if (total == 0L) 0 else finished.toDouble / total
     override def render(width: Int): String = {
       val numberEnd = width / 2 + 1
       val progressPercent = Math.round(progress * 100).toInt
