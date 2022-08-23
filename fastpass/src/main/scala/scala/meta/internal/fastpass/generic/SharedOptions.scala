@@ -20,7 +20,7 @@ case class SharedOptions(
       "The path to the `pants` executable. " +
         "Defaults to the `pants` executable in the workspace directory."
     )
-    pants: Option[Path] = None,
+    pantsPath: Option[Path] = None,
     @Description(
       "The path to the `bazel` executable. " +
         "Defaults to the `bazel` executable in the workspace directory."
@@ -28,7 +28,7 @@ case class SharedOptions(
     bazelPath: Option[Path] = None
 ) {
   def bloopDirectory: Path = workspace.resolve(".bloop")
-  def pantsBinary: Path = pants.getOrElse(workspace.resolve("pants"))
+  def pantsBinary: Path = pantsPath.getOrElse(workspace.resolve("pants"))
   def bazelBinary: Path = bazelPath.getOrElse(workspace.resolve("bazel"))
   val home: AbsolutePath = AbsolutePath {
     Option(System.getenv("FASTPASS_HOME")) match {

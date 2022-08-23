@@ -31,11 +31,11 @@ object CreateCommand extends Command[CreateOptions]("create") {
       Doc.line,
       List(
         "# Create project with custom name from two Pants targets",
-        "fastpass create --name PROJECT_NAME TARGETS1:: TARGETS2::", "",
+        "fastpass create --pants --name PROJECT_NAME TARGETS1:: TARGETS2::", "",
         "# Create project with an auto-generated name with Bazel",
-        "fastpass create --bazel --name PROJECT_NAME TARGETS1/... TARGETS2/...",
-        "# Create project with an auto-generated name, infer Bazel",
-        "fastpass create --name PROJECT_NAME TARGETS1/... TARGETS2/...", "",
+        "fastpass create --name PROJECT_NAME TARGETS1/... TARGETS2/...",
+        "# Create project with an auto-generated name, infer Pants",
+        "fastpass create --name PROJECT_NAME TARGETS1:: TARGETS2::", "",
         "# Create project with an auto-generated name and launch IntelliJ",
         "fastpass create --intellij TARGETS/..."
       ).map(Doc.text)
@@ -43,10 +43,10 @@ object CreateCommand extends Command[CreateOptions]("create") {
   override def complete(
       context: TabCompletionContext
   ): List[TabCompletionItem] = {
-    val isBazel = context.arguments.contains("--bazel")
+    val isPants = context.arguments.contains("--pants")
     context.setting match {
       case None =>
-        completeTargetSpec(context, PathIO.workingDirectory, isBazel)
+        completeTargetSpec(context, PathIO.workingDirectory, isPants)
       case _ =>
         Nil
     }
@@ -82,7 +82,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
 
       case None =>
         val importMode =
-          if (create.bazel) ImportMode.Bazel else ImportMode.Pants
+          if (create.pants) ImportMode.Pants else ImportMode.Bazel
         val project = Project.create(
           name,
           create.common,
@@ -127,35 +127,23 @@ object CreateCommand extends Command[CreateOptions]("create") {
         create.common.workspace.resolve(target.stripPrefix("//"))
       )
 
-    // If we find a recursive wildcard import, then we know it's a bazel import
-    val isBazel = create.bazel || create.targets.exists(tgt =>
-      tgt.endsWith("/...") || tgt.startsWith("//")
-    )
+    // If we find a recursive glob of targets, then we know it's a pants import
+    val isPants =
+      create.pants || create.targets.exists(tgt => tgt.endsWith("::"))
 
-    if (isBazel) {
+    if (isPants) {
       val targets = create.targets.map { target =>
-        // Don't touch targets that look like Bazel queries
-        if (!Bazel.isPlainSpec(target)) {
-          target
+        // Translate foo/bar/... to foo/bar::
+        if (target.endsWith("/...") && isDir(target.stripSuffix("/..."))) {
+          target.stripSuffix("/...") + "::"
         }
-        // Translate foo/bar to foo/bar/... This is inconsistent with Pants (foo/bar:bar),
-        // but more likely to be what the user meant: import directory recursively.
-        else if (
-          !target.contains(":") && !target.endsWith("/...") && isDir(target)
-        ) {
-          target + "/..."
-        }
-        // Translate foo/bar:: to foo/bar/...
-        else if (target.endsWith("::") && isDir(target.stripSuffix("::"))) {
-          target.stripSuffix("::") + "/..."
-        }
-        // Translate foo/bar: to foo/bar:all
-        else if (target.endsWith(":") && isDir(target.stripSuffix(":"))) {
-          target + "all"
+        // Translate foo/bar:all to foo/bar:
+        else if (target.endsWith(":all") && isDir(target.stripSuffix(":all"))) {
+          target.stripSuffix("all")
         } else target
       }
 
-      create.copy(bazel = true, targets = targets)
+      create.copy(pants = true, targets = targets)
     } else {
       create
     }
@@ -165,9 +153,9 @@ object CreateCommand extends Command[CreateOptions]("create") {
   private def completeTargetSpec(
       context: TabCompletionContext,
       cwd: AbsolutePath,
-      isBazel: Boolean
+      isPants: Boolean
   ): List[TabCompletionItem] = {
-    val suffix = if (isBazel) "/..." else "::"
+    val suffix = if (isPants) "::" else "/..."
     val path =
       context.last.split(File.separatorChar).foldLeft(cwd) {
         case (dir, "") => dir
