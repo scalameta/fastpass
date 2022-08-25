@@ -48,10 +48,11 @@ object ProgressConsole {
   )(f: T => Unit): Try[Unit] = {
     if (!elems.hasDefiniteSize) auto(title)(_ => elems.foreach(f))
     else {
-      manual(title, elems.size) { advance =>
+      manual(title) { advance =>
+        val total = elems.size
         elems.foreach { elem =>
           f(elem)
-          advance(1)
+          advance(1, total)
         }
       }
     }
@@ -68,18 +69,17 @@ object ProgressConsole {
 
   def manual[T](
       title: String,
-      total: Long,
       output: Console = new ScrollableConsole(System.err, 5)
-  )(op: ((Long) => Unit) => T): Try[T] = {
+  )(op: ((Long, Long) => Unit) => T): Try[T] = {
     val console = new ProgressConsole(Progress.NoProgress, title, output)
     var currentProgress: Long = 0
-    val advance = (inc: Long) => {
+    val advance = (inc: Long, total: Long) => {
       console.setProgress(
         ProgressUpdate.RemainingElements(currentProgress, total)
       )
       currentProgress += inc
     }
-    advance(0)
+    advance(0, 0)
     timed(
       output.stream,
       title,
