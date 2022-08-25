@@ -115,7 +115,7 @@ object BloopBazel {
             )
             actions <- bazel.aquery(importedTargets.map(_.getRule.getName))
             actionGraph = ActionGraph(actions)
-            targetGlobs <- targetToSources(importedTargets, bazel)
+            sourcesInfo <- targetToSources(importedTargets, bazel)
             rawInputs = rawTargetInputs(importedTargets, actionGraph)
             rawRuntimeInputs =
               rawRuntimeTargetInputs(importedTargets, actionGraph)
@@ -128,7 +128,7 @@ object BloopBazel {
               dependencies,
               importedTargets,
               actionGraph,
-              targetGlobs,
+              sourcesInfo,
               rawInputs,
               rawRuntimeInputs,
               scalaJars,
@@ -162,13 +162,13 @@ object BloopBazel {
     val importedTargets = js("importedTargets").arr.toList
       .map(JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom))
     val actionGraph = ActionGraph.fromJson(protoIndex, js("actionGraph"))
-    val targetGlobs =
+    val sourcesInfo =
       JsonUtils.mapFromJson(
-        js("targetGlobs"),
+        js("sourcesInfo"),
         "target",
         JsonUtils.jsonToProto(protoIndex, _)(Target.parseFrom),
-        "globs",
-        js => PantsGlobs.fromJson(ujson.Obj("globs" -> js))
+        "infos",
+        js => SourcesInfo.fromJson(js)
       )
     val rawTargetInputs =
       JsonUtils.mapFromJson(
@@ -197,7 +197,7 @@ object BloopBazel {
       dependenciesToBuild,
       importedTargets,
       actionGraph,
-      targetGlobs,
+      sourcesInfo,
       rawTargetInputs,
       rawRuntimeTargetInputs,
       scalaJars,
@@ -398,16 +398,15 @@ object BloopBazel {
   private def targetToSources(
       importedTargets: List[Target],
       bazel: Bazel
-  ): Try[Map[Target, PantsGlobs]] = {
+  ): Try[Map[Target, SourcesInfo]] = {
     val packages =
       importedTargets.map(_.getRule().getName().takeWhile(_ != ':')).distinct
     bazel.sourcesGlobs(packages).map { labelToSources =>
       val mappings = for {
         target <- importedTargets
         label = target.getRule().getName()
-        (includes, excludes) <- labelToSources.get(label)
-        globs = PantsGlobs(includes, excludes)
-      } yield target -> globs
+        info <- labelToSources.get(label)
+      } yield target -> info
       mappings.toMap
     }
   }
@@ -482,7 +481,7 @@ private class BloopBazel(
     dependenciesToBuild: List[String],
     importedTargets: List[Target],
     actionGraph: ActionGraph,
-    targetGlobs: Map[Target, PantsGlobs],
+    sourcesInfo: Map[Target, SourcesInfo],
     rawTargetInputs: Map[Target, List[Artifact]],
     rawRuntimeTargetInputs: Map[Target, List[Artifact]],
     scalaJars: List[Path],
@@ -559,7 +558,8 @@ private class BloopBazel(
       case Nil =>
         acc
       case target :: rest =>
-        val currentSourceDirs = getAttribute(target, "srcs")
+        val currentSourceDirs = Bazel
+          .getAttribute(target, "srcs")
           .map(_.getStringListValueList.asScala.toList)
           .getOrElse(Nil)
           .map { src =>
@@ -668,10 +668,10 @@ private class BloopBazel(
           importedTargets.map(JsonUtils.protoToJson(protoIndex, _))
         newJson("dependenciesToBuild") = dependenciesToBuild
         newJson("actionGraph") = actionGraph.toJson(protoIndex)
-        newJson("targetGlobs") = JsonUtils.mapToJson(targetGlobs)(
+        newJson("sourcesInfo") = JsonUtils.mapToJson(sourcesInfo)(
           "target",
           JsonUtils.protoToJson(protoIndex, _),
-          "globs",
+          "infos",
           _.toJson
         )
         newJson("rawTargetInputs") = JsonUtils.mapToJson(rawTargetInputs)(
@@ -757,6 +757,13 @@ private class BloopBazel(
     val projectPackage = projectName.takeWhile(_ != ':')
     val (sources, sourcesGlobs) =
       targetSourcesAndGlobs(target, projectDirectory)
+    val (javaSources, javaSourcesGlobs) =
+      sourcesInfo.get(target).map(_.javaSources).getOrElse(Nil) match {
+        case Nil => (Nil, Nil)
+        case labels =>
+          val (sources, globs) = labels.map(resolveJavaSources).unzip
+          (sources.flatten, globs.flatten)
+      }
     val deps = dependencies(target).map(BloopBazel.bloopName)
     val targetDir =
       BloopBazel.targetDirectory(project, BloopBazel.bloopName(target))
@@ -803,15 +810,18 @@ private class BloopBazel(
     // This should not be necessary anymore when our Bazel rules will
     // observe `strict_deps`.
     val forceFork = cp.length > 2000
+    val allGlobs = sourcesGlobs
+      .map(globs =>
+        globs.bloopConfig(project.common.workspace, projectDirectory)
+      )
+      .toList ++ javaSourcesGlobs
 
     Config.Project(
       name = projectName,
       directory = projectDirectory,
       workspaceDir = Some(project.common.workspace),
-      sources = sources.map(project.common.workspace.resolve(_)),
-      sourcesGlobs = sourcesGlobs.map(globs =>
-        List(globs.bloopConfig(project.common.workspace, projectDirectory))
-      ),
+      sources = sources.map(project.common.workspace.resolve(_)) ++ javaSources,
+      sourcesGlobs = Some(allGlobs).filter(_.nonEmpty),
       sourceRoots = approximateSourceRoot(projectDirectory).map(_ :: Nil),
       dependencies = deps,
       classpath = cp,
@@ -1015,10 +1025,12 @@ private class BloopBazel(
   private def targetSourcesAndGlobs(
       target: Target,
       projectDirectory: Path
-  ): (List[String], Option[PantsGlobs]) =
+  ): (List[String], Option[PantsGlobs]) = {
     if (isResources(target)) (Nil, None)
-    else
-      targetGlobs.get(target) match {
+    else {
+      val infos = sourcesInfo.get(target)
+      val pantsGlobs = infos.map(i => PantsGlobs(i.include, i.exclude))
+      pantsGlobs match {
         case Some(globs) if globs.isEmpty =>
           // Finding empty globs means that buildozer was able to extract the target from
           // the build file, but no sources were set. This means we need to use the default
@@ -1040,6 +1052,44 @@ private class BloopBazel(
             .getOrElse(Nil)
           (sources, None)
       }
+    }
+  }
+
+  private def resolveJavaSources(
+      label: String
+  ): (List[Path], List[Config.SourcesGlobs]) = {
+    val packageName = label.takeWhile(_ != ':')
+    val baseDirectory = project.common.workspace
+      .resolve(packageName.stripPrefix("//"))
+
+    importedTargets.find(_.getRule.getName == label) match {
+      // The target is a target that we imported, we can simply reuse the information
+      case Some(target) =>
+        val targetBase =
+          project.common.workspace.resolve(Bazel.enclosingPackage(target))
+        val (sources, pantsGlobs) = targetSourcesAndGlobs(target, targetBase)
+        (
+          sources.map(baseDirectory.resolve(_)),
+          pantsGlobs.toList.map(
+            _.bloopConfig(project.common.workspace, baseDirectory)
+          )
+        )
+
+      // The target is not an imported target, we need to find this information
+      case None =>
+        val absoluteLabel = if (label.startsWith("//")) label else "//" + label
+        bazel.groupedSourcesGlobs(packageName :: Nil).get(absoluteLabel) match {
+          case None =>
+            (Nil, Nil)
+          case Some(SourcesInfo(include, exclude, _)) =>
+            (
+              Nil,
+              PantsGlobs(include, exclude)
+                .bloopConfig(project.common.workspace, baseDirectory) :: Nil
+            )
+        }
+    }
+  }
 
   private def isTest(target: Target): Boolean = {
     target.getRule().getRuleClass() == "scala_junit_test"
