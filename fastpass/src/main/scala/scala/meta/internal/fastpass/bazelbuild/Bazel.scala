@@ -27,6 +27,13 @@ import scala.meta.internal.fastpass.console.ProgressConsole
 import com.google.protobuf.TextFormat
 
 object Bazel {
+
+  def enclosingPackage(target: Target): String = {
+    val label = target.getRule.getName
+    val index = label.indexOf(':')
+    if (index == -1) label else label.substring(0, index)
+  }
+
   def isPlainSpec(spec: String): Boolean =
     !spec.contains("(") && !spec.contains(" ")
 
@@ -319,7 +326,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
 
   def sourcesGlobs(
       pkgs: Iterable[String]
-  ): Try[Map[String, (List[String], List[String])]] = {
+  ): Try[Map[String, SourcesInfo]] = {
     ProgressConsole.manual("Inspecting targets source globs") { advance =>
       val total = pkgs.size
 
@@ -327,7 +334,7 @@ class Bazel(bazelPath: Path, cwd: Path) {
       // going over the command line max size.
       pkgs
         .sliding(100, 100)
-        .foldLeft(Map.empty[String, (List[String], List[String])]) {
+        .foldLeft(Map.empty[String, SourcesInfo]) {
           case (acc, pkgGroup) =>
             val newAcc = acc ++ groupedSourcesGlobs(pkgGroup)
             advance(pkgGroup.size, total)
@@ -336,28 +343,54 @@ class Bazel(bazelPath: Path, cwd: Path) {
     }
   }
 
-  private def groupedSourcesGlobs(
+  def groupedSourcesGlobs(
       pkgs: Iterable[String]
-  ): Map[String, (List[String], List[String])] = {
+  ): Map[String, SourcesInfo] = {
     val out = new ByteArrayOutputStream
     val cmd = List("pants-support/buildifier/bin/buildozer-bazel") ++
       pkgs.map(_ + ":all") ++
-      List("print label sources")
+      List("print label sources java_sources")
 
     val code = run(cmd, out)
-    val targetInfo = """(.+) \[(.+)\]""".r
-    val noSourcesTargetInfo = """(.+) \(missing\)""".r
+
+    val sourcesAndJavaSources = """(.+) \[(.+)\] \[(.+)\]""".r
+    val sourcesNoJavaSources = """(.+) \[(.+)\] \(missing\)""".r
+    val noSourcesJavaSources = """(.+) \(missing\) \[(.+)\]""".r
+    val noSourcesNoJavaSources = """(.+) \(missing\) \(missing\)""".r
+
+    def preparePatterns(patterns: String): (List[String], List[String]) = {
+      val (excludes, includes) =
+        patterns.split(" ").toList.partition(_.startsWith("!"))
+      (includes, excludes.map(_.tail))
+    }
+
+    def prepareJavaSources(javaSources: String): List[String] = {
+      javaSources.split(" ").toList
+    }
+
     // 1 is the only exit code that indicates complete failure.
     if (code != 1) {
       val lines = out.toString("UTF-8").linesIterator
-      lines.foldLeft(Map.empty[String, (List[String], List[String])]) {
-        case (acc, line @ noSourcesTargetInfo(lbl)) =>
-          acc + (lbl -> ((Nil, Nil)))
-        case (acc, line @ targetInfo(lbl, pats)) =>
-          val (excludes, includes) =
-            pats.split(" ").toList.partition(_.startsWith("!"))
-          acc + (lbl -> ((includes, excludes.map(_.tail))))
-        case (acc, line) =>
+      lines.foldLeft(Map.empty[String, SourcesInfo]) {
+        case (acc, sourcesAndJavaSources(lbl, pats, javaSources)) =>
+          val (includes, excludes) = preparePatterns(pats)
+          acc + (lbl -> SourcesInfo(
+            includes,
+            excludes,
+            prepareJavaSources(javaSources)
+          ))
+
+        case (acc, sourcesNoJavaSources(lbl, pats)) =>
+          val (includes, excludes) = preparePatterns(pats)
+          acc + (lbl -> SourcesInfo(includes, excludes, Nil))
+
+        case (acc, noSourcesJavaSources(lbl, javaSources)) =>
+          acc + (lbl -> SourcesInfo(Nil, Nil, prepareJavaSources(javaSources)))
+
+        case (acc, noSourcesNoJavaSources(lbl)) =>
+          acc + (lbl -> SourcesInfo(Nil, Nil, Nil))
+
+        case (acc, _) =>
           acc
       }
     } else {

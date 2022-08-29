@@ -36,6 +36,44 @@ class NoRemoteCache(reason: Throwable) extends RemoteCache {
     Failure(reason)
 }
 
+/**
+ * A remote cache implementation that reads from and writes to the local disk. It can be used to
+ * test serialization and deserialization.
+ *
+ * Artifacts will be stored in `$baseDirectory/$cacheKey/$filename`.
+ */
+private class FileRemoteCache(
+    baseDirectory: Path,
+    cacheKey: String
+) extends RemoteCache {
+
+  private val cacheRoot = baseDirectory.resolve(cacheKey)
+  Files.createDirectories(cacheRoot)
+
+  override def getFromCache[T](
+      filename: String
+  )(op: InputStream => T): Try[T] = {
+    val path = cacheRoot.resolve(filename)
+    Try {
+      val stream = Files.newInputStream(path)
+      try op(stream)
+      finally stream.close()
+    }
+  }
+
+  override def writeToCache(
+      filename: String
+  )(op: OutputStream => Unit): Try[Boolean] = {
+    val path = cacheRoot.resolve(filename)
+    Try {
+      val stream = Files.newOutputStream(path)
+      try { op(stream); true }
+      finally stream.close()
+    }
+  }
+
+}
+
 private class HttpRemoteCache(
     cacheConfig: CacheConfig,
     cacheKey: String
