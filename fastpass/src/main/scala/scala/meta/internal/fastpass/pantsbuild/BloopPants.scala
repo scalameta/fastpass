@@ -530,7 +530,8 @@ private class BloopPants(
         )
       ),
       resolution = resolution,
-      tags = Some(tags)
+      tags = Some(tags),
+      sourceGenerators = None
     )
   }
 
@@ -589,7 +590,8 @@ private class BloopPants(
       test = None,
       platform = None,
       resolution = None,
-      tags = None
+      tags = None,
+      sourceGenerators = None
     )
   }
 

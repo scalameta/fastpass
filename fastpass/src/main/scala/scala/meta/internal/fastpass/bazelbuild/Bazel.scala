@@ -43,6 +43,13 @@ object Bazel {
   ): Option[Attribute] =
     target.getRule().getAttributeList().asScala.find(_.getName() == attribute)
 
+  def generatorFunction(target: Target): Option[String] =
+    getAttribute(target, "generator_function").map(_.getStringValue())
+
+  val ScroogeWorkerLabel =
+    "@io_bazel_rules_scala//src/scala/scripts:scrooge_worker"
+  val ScroogeWorkerMnemonic = "TemplateExpand"
+
   private val extToExclude = List(
     ".semanticdb",
     ".deployjar",
@@ -212,6 +219,8 @@ class Bazel(bazelPath: Path, cwd: Path) {
         val rule = target.getRule()
         val label = rule.getName()
         val ruleClass = rule.getRuleClass()
+        // Replace `//3rdparty/jvm/...` with the actual target in the `maven` repository, so that
+        // Bazel will build the source jars for these targets.
         if (
           label.startsWith(
             "//3rdparty/jvm/"

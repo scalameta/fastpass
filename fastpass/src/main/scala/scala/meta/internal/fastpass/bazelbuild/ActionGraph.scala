@@ -17,6 +17,16 @@ class ActionGraph(
     idToPathFragment: Map[Int, PathFragment]
 ) {
 
+  def outputsOfMnemonic(label: String, mnemonic: String): List[Artifact] = {
+    labelToActions
+      .getOrElse(label, Nil)
+      .find(_.getMnemonic() == mnemonic)
+      .map(
+        _.getOutputIdsList().asScala.flatMap(x => idToArtifact.get(x)).toList
+      )
+      .getOrElse(Nil)
+  }
+
   def outputsOf(label: String): List[Artifact] = {
     labelToActions
       .getOrElse(label, Nil)

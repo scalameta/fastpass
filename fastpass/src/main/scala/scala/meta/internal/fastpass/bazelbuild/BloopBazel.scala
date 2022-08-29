@@ -7,10 +7,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermission
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters.asScalaBufferConverter
+import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
 import scala.util.Success
 import scala.util.Try
@@ -33,7 +35,7 @@ import metaconfig.cli.CliApp
 
 object BloopBazel {
 
-  final val CacheFormatVersion = "2"
+  final val CacheFormatVersion = "3"
 
   def run(
       project: Project,
@@ -103,22 +105,32 @@ object BloopBazel {
           app.warn(s"No cached export available: ${err.getMessage}")
           val importableRules = supportedRules.keys.toList
           for {
-            dependencies <- bazel.dependenciesToBuild(
+            rawDependencies <- bazel.dependenciesToBuild(
               project.targets,
               importableRules,
               forbiddenGenerators,
               forbiddenTags
             )
+            // Always build the Scrooge worker, since we may need it in case we import Thrift
+            // targets. It builds quickly, so it's easier to always build it rather than figuring
+            // out whether we'll actually need it.
+            dependencies = Bazel.ScroogeWorkerLabel :: rawDependencies
             importedTargets <- bazel.targetsInfos(
               project.targets,
               importableRules,
               forbiddenGenerators,
               forbiddenTags
             )
-            actions <- bazel.aquery(importedTargets.map(_.getRule.getName))
+            extractors = new Extractors(importedTargets)
+            // Also query the action graph of the Scrooge worker, so that we know where to find the
+            // script to run to regenerate the sources.
+            actionGraphLabels =
+              Bazel.ScroogeWorkerLabel :: importedTargets.map(_.getRule.getName)
+            actions <- bazel.aquery(actionGraphLabels)
             actionGraph = ActionGraph(actions)
-            sourcesInfo <- targetToSources(importedTargets, bazel)
-            rawInputs = rawTargetInputs(importedTargets, actionGraph)
+            sourcesInfo <- targetToSources(extractors, importedTargets, bazel)
+            rawInputs =
+              rawTargetInputs(extractors, importedTargets, actionGraph)
             rawRuntimeInputs =
               rawRuntimeTargetInputs(importedTargets, actionGraph)
           } yield {
@@ -129,6 +141,7 @@ object BloopBazel {
               bazelInfo,
               dependencies,
               importedTargets,
+              extractors,
               actionGraph,
               sourcesInfo,
               rawInputs,
@@ -198,6 +211,7 @@ object BloopBazel {
       bazelInfo,
       dependenciesToBuild,
       importedTargets,
+      new Extractors(importedTargets),
       actionGraph,
       sourcesInfo,
       rawTargetInputs,
@@ -299,38 +313,14 @@ object BloopBazel {
       }
   }
 
-  private def copyJars(
-      bazelInfo: BazelInfo,
+  private def generatedSourceDirectory(
       project: Project,
-      importedTargets: List[Target],
-      actionGraph: ActionGraph,
-      rawTargetInputs: Map[Target, List[Artifact]],
-      rawRuntimeTargetInputs: Map[Target, List[Artifact]]
-  ): Try[CopiedJars] = {
-    val fromOutputs = importedTargets.flatMap { target =>
-      val label = target.getRule().getName()
-      actionGraph.outputsOf(label).map { output =>
-        output -> targetDirectory(project, bloopName(target))
-          .resolve("classes")
-          .toNIO
-      }
-    }.toMap
-
-    val allInputs =
-      rawTargetInputs.valuesIterator.flatten.toSet ++ rawRuntimeTargetInputs.valuesIterator.flatten.toSet -- fromOutputs.keySet
-
-    val fromInputs =
-      copyImmutableJars(
-        bazelInfo,
-        project.bspRoot.toNIO,
-        allInputs,
-        actionGraph
-      )
-
-    fromInputs.map {
-      case CopiedJars(inputMappings, sourceJars) =>
-        CopiedJars(inputMappings ++ fromOutputs, sourceJars)
-    }
+      bloopName: String
+  ): AbsolutePath = {
+    val dirName = FileUtils.sanitizeFileName(bloopName)
+    val dir = project.bspRoot.resolve("source-generators").resolve(dirName)
+    Files.createDirectories(dir.toNIO)
+    dir
   }
 
   private def targetDirectory(
@@ -347,13 +337,20 @@ object BloopBazel {
     target.getRule().getName().stripPrefix("//")
 
   private def rawTargetInputs(
+      extractors: Extractors,
       importedTargets: List[Target],
       actionGraph: ActionGraph
   ): Map[Target, List[Artifact]] = {
+    import extractors._
     importedTargets.map { target =>
-      val ruleClass = target.getRule().getRuleClass()
-      val mnemonics = supportedRules.getOrElse(ruleClass, Set.empty)
-      val label = target.getRule.getName()
+      val (label, mnemonics) = target match {
+        case ThriftTarget(_, thriftRoot, mnemonic) =>
+          (thriftRoot.getRule().getName(), Set(mnemonic))
+        case other =>
+          val rule = other.getRule().getRuleClass()
+          val mnemonics = supportedRules.getOrElse(rule, Set.empty)
+          (other.getRule().getName(), mnemonics)
+      }
       target -> actionGraph.transitiveInputsOf(label, mnemonics)
     }.toMap
   }
@@ -398,15 +395,28 @@ object BloopBazel {
   }
 
   private def targetToSources(
+      extractors: Extractors,
       importedTargets: List[Target],
       bazel: Bazel
   ): Try[Map[Target, SourcesInfo]] = {
-    val packages =
-      importedTargets.map(_.getRule().getName().takeWhile(_ != ':')).distinct
+    import extractors._
+
+    @tailrec
+    def labelFor(target: Target): String =
+      target match {
+        case ThriftRoot(buildName, _, _) =>
+          buildName
+        case ThriftTarget(_, root, _) =>
+          labelFor(root)
+        case _ =>
+          target.getRule().getName
+      }
+
+    val packages = importedTargets.map(Bazel.enclosingPackage)
     bazel.sourcesGlobs(packages).map { labelToSources =>
       val mappings = for {
         target <- importedTargets
-        label = target.getRule().getName()
+        label = labelFor(target)
         info <- labelToSources.get(label)
       } yield target -> info
       mappings.toMap
@@ -421,7 +431,10 @@ object BloopBazel {
     "_scala_macro_library" -> Set("Scalac"),
     "scala_junit_test" -> Set("Scalac"),
     "scala_binary" -> Set("Middleman"),
-    "_jvm_app" -> Set()
+    "_jvm_app" -> Set(),
+    "scrooge_scala_library" -> Set("ScroogeRule", "Scalac"),
+    "scrooge_java_library" -> Set("ScroogeRule", "Javac"),
+    "thrift_library" -> Set("ScroogeRule")
   )
 
   private val forbiddenGenerators: Map[String, List[String]] = Map(
@@ -487,6 +500,7 @@ private class BloopBazel(
     bazelInfo: BazelInfo,
     dependenciesToBuild: List[String],
     importedTargets: List[Target],
+    extractors: Extractors,
     actionGraph: ActionGraph,
     sourcesInfo: Map[Target, SourcesInfo],
     rawTargetInputs: Map[Target, List[Artifact]],
@@ -494,13 +508,14 @@ private class BloopBazel(
     scalaJars: List[Path],
     testFrameworksJars: List[Path]
 ) {
+  import extractors._
 
   def run(): Try[Option[PantsExportResult]] = {
     val bloopDir = this.project.bspRoot.resolve(".bloop").toNIO
     Files.createDirectories(bloopDir)
     for {
       _ <- bazel.build(dependenciesToBuild, "_source_jars" :: Nil)
-      inputsMapping <- BloopBazel.copyJars(
+      inputsMapping <- copyJars(
         bazelInfo,
         project,
         importedTargets,
@@ -543,14 +558,18 @@ private class BloopBazel(
       case (path, target :: Nil) =>
         (path, target) :: Nil
       case (path, targets) =>
-        app.warn(
-          s"""The base directory '$path' is shared by the following targets:
-             |${targets.map(_.getRule.getName).mkString(", ")}
-             |
-             |Some of these targets may not appear in IntelliJ and cause other issues. To fix
-             |this problem, move these targets or their sources to a dedicated directory.
-             |See http://go/111""".stripMargin
-        )
+        // Thrift targets always share the same root directory, and it's fine because they'll
+        // all share the same "classpath"
+        if (targets.exists(!isThriftTarget(_))) {
+          app.warn(
+            s"""The base directory '$path' is shared by the following targets:
+               |${targets.map(_.getRule.getName).mkString(", ")}
+               |
+               |Some of these targets may not appear in IntelliJ and cause other issues. To fix
+               |this problem, move these targets or their sources to a dedicated directory.
+               |See http://go/111""".stripMargin
+          )
+        }
         targets.map((path, _))
     }
   }
@@ -702,8 +721,27 @@ private class BloopBazel(
   private def dependencies(target: Target): List[Target] =
     target match {
       // jvm_app targets depend only on the binary they wrap.
-      case JvmApp(_, bin) => bin :: Nil
-      case _ => targetDependencies.get(target).getOrElse(Nil)
+      case JvmAppTarget(_, bin) =>
+        bin :: Nil
+      case ThriftTarget(target, root, mnemonic) =>
+        // A thrift target can only depend on other thrift targets. We add a dependency
+        // on the implementation that matches the current mnemonic.
+        targetDependencies
+          .getOrElse(root, Nil)
+          .collect {
+            case ThriftRoot(_, java, scala) =>
+              if (mnemonic == "Javac") java else scala
+          }
+          .flatten
+      case _ =>
+        targetDependencies.getOrElse(target, Nil).flatMap {
+          // If a non-thrift target depends on a thrift root, add a dependency on all
+          // thrift implementation targets.
+          case ThriftRoot(_, java, scala) =>
+            java ++ scala
+          case other =>
+            other :: Nil
+        }
     }
 
   private def classpath(
@@ -712,7 +750,7 @@ private class BloopBazel(
   ): List[Path] =
     target match {
       // jvm_app targets have no sources to compile; their compile classpath can be empty.
-      case JvmApp(_, bin) =>
+      case JvmAppTarget(_, bin) =>
         Nil
       case _ =>
         val inputs = rawTargetInputs.getOrElse(target, Nil)
@@ -728,7 +766,7 @@ private class BloopBazel(
   ): List[Path] =
     target match {
       // jvm_app targets use the same runtime classpath as the scala_binary they wrap.
-      case JvmApp(_, bin) =>
+      case JvmAppTarget(_, bin) =>
         runtimeClasspath(inputsMapping, bin)
       case _ =>
         val inputs = rawRuntimeTargetInputs.getOrElse(
@@ -743,7 +781,7 @@ private class BloopBazel(
   private def javaOptions(target: Target): List[String] =
     target match {
       // jvm_app targets are run with the java options of the binary they wrap.
-      case JvmApp(_, bin) =>
+      case JvmAppTarget(_, bin) =>
         javaOptions(bin)
       case _ =>
         val options = Bazel
@@ -753,27 +791,199 @@ private class BloopBazel(
         s"-Duser.dir=${bazelInfo.workspace}" :: options
     }
 
-  private def bloopProject(
+  private def sourceGenerators(
       inputsMapping: CopiedJars,
       target: Target,
       projectDirectory: Path
-  ): Config.Project = {
-    val projectName = BloopBazel.bloopName(target)
-    val projectPackage = projectName.takeWhile(_ != ':')
-    val (sources, sourcesGlobs) =
-      targetSourcesAndGlobs(target, projectDirectory)
-    val (javaSources, javaSourcesGlobs) =
-      sourcesInfo.get(target).map(_.javaSources).getOrElse(Nil) match {
-        case Nil => (Nil, Nil)
-        case labels =>
-          val (sources, globs) = labels.map(resolveJavaSources).unzip
-          (sources.flatten, globs.flatten)
-      }
-    val deps = dependencies(target).map(BloopBazel.bloopName)
-    val targetDir =
-      BloopBazel.targetDirectory(project, BloopBazel.bloopName(target))
-    val resources =
-      if (isResources(target)) {
+  ): Option[List[Config.SourceGenerator]] = {
+    target match {
+      case ThriftTarget(_, root, mnemonic) =>
+        val bloopName = BloopBazel.bloopName(target)
+        val generatedSourcesDirectory =
+          BloopBazel.generatedSourceDirectory(project, bloopName)
+
+        // If this project depends on other Thrift targets, then we need to pass their Thrift
+        // sources to the source generator of the current target.
+        val thriftIncludes = {
+          // The thrift includes provided by other targets in this import
+          val internalThriftIncludes = dependencies(target).map { dep =>
+            val depName = BloopBazel.bloopName(dep)
+            val outDirectory =
+              BloopBazel.generatedSourceDirectory(project, depName)
+            outDirectory.resolve("thrift-sources.srcjar")
+          }
+
+          val externalThriftIncludes =
+            actionGraph
+              .transitiveInputsOf(root.getRule.getName, Set("ScroogeRule"))
+              .filterNot(rawOutputToTarget.contains)
+              .filter(artifact =>
+                actionGraph.pathOf(artifact).endsWith("--thrift-root.jar")
+              )
+              .flatMap(inputsMapping.artifactToPath.get)
+              .map(AbsolutePath(_))
+              .distinct
+
+          internalThriftIncludes ++ externalThriftIncludes
+        }
+
+        val globs = {
+          val targetSources =
+            targetSourcesAndGlobs(root, projectDirectory) match {
+              case (_, None) => Nil
+              case (_, Some(srcs)) =>
+                srcs.bloopConfig(
+                  project.common.workspace,
+                  projectDirectory
+                ) :: Nil
+            }
+          val includes = thriftIncludes.map { sourceJar =>
+            val nioSourceJar = sourceJar.toNIO
+            Config.SourcesGlobs(
+              nioSourceJar.getParent,
+              walkDepth = Some(1),
+              includes = s"glob:${nioSourceJar.getFileName}" :: Nil,
+              excludes = Nil
+            )
+          }
+
+          targetSources ++ includes
+        }
+
+        val scroogeWorker = actionGraph
+          .outputsOfMnemonic(
+            Bazel.ScroogeWorkerLabel,
+            Bazel.ScroogeWorkerMnemonic
+          )
+          .headOption
+          .map { artifact =>
+            val path = actionGraph.pathOf(artifact)
+            bazelInfo.workspace.resolve(path)
+          }
+
+        scroogeWorker.map { worker =>
+          val thriftScript = writeThriftSourceGeneratorScript(
+            target,
+            if (mnemonic == "Javac") "java" else "scala",
+            generatedSourcesDirectory,
+            thriftIncludes,
+            worker
+          )
+          Config.SourceGenerator(
+            sourcesGlobs = globs,
+            outputDirectory =
+              generatedSourcesDirectory.resolve("generated").toNIO,
+            command = List(thriftScript.syntax)
+          ) :: Nil
+        }
+      case _ =>
+        None
+    }
+  }
+
+  private def writeThriftSourceGeneratorScript(
+      target: Target,
+      language: String,
+      generatedSourcesDirectory: AbsolutePath,
+      thriftIncludes: List[AbsolutePath],
+      scroogeWorker: AbsolutePath
+  ): AbsolutePath = {
+    val filename = FileUtils.sanitizeFileName(target.getRule.getName, ".sh")
+    val scriptLocation = generatedSourcesDirectory.resolve(filename)
+    val flags = Bazel
+      .getAttribute(target, "compiler_args")
+      .map(_.getStringListValueList().asScala)
+      .getOrElse(Nil) ++ List("--language", language)
+    val content =
+      s"""#!/bin/bash -eu
+         |OUTPUT_DIRECTORY="$$1"; shift
+         |
+         |BAZEL_WORKSPACE="${bazelInfo.workspace}"
+         |SCROOGE_INPUT="$generatedSourcesDirectory/scrooge-input"
+         |SCROOGE_SOURCES_JAR="$generatedSourcesDirectory/thrift-sources.srcjar"
+         |SCROOGE_OUTPUT="$generatedSourcesDirectory/scrooge-output.jar"
+         |echo "$$SCROOGE_OUTPUT" > "$$SCROOGE_INPUT"
+         |echo "_$$SCROOGE_SOURCES_JAR" >> "$$SCROOGE_INPUT"
+         |echo "_${thriftIncludes.mkString(":")}" >> "$$SCROOGE_INPUT"
+         |echo "_" >> "$$SCROOGE_INPUT"
+         |echo "_" >> "$$SCROOGE_INPUT"
+         |echo "_${flags.mkString(":")}" >> "$$SCROOGE_INPUT"
+         |
+         |SHALLOWEST_SOURCE=""
+         |MIN_DEPTH=1000
+         |for ARG in "$$@"; do
+         |  if [[ "$$ARG" == *.srcjar ]]; then
+         |    continue
+         |  else
+         |    CURRENT_DEPTH="$$(($$(echo "$$ARG" | tr -c -d '/' | wc -c) + 1))"
+         |    if [ $$CURRENT_DEPTH -lt $$MIN_DEPTH ]; then
+         |      SHALLOWEST_SOURCE="$$ARG"
+         |      MIN_DEPTH=$$CURRENT_DEPTH
+         |    fi
+         |  fi
+         |done
+         |
+         |if [[ $${SHALLOWEST_SOURCE#$$BAZEL_WORKSPACE} == src/thrift/* ]]; then
+         |  ABSOLUTE_PREFIX="$$BAZEL_WORKSPACE/src/thrift"
+         |elif [[ $${SHALLOWEST_SOURCE#$$BAZEL_WORKSPACE} == tests/thrift/* ]]; then
+         |  ABSOLUTE_PREFIX="$$BAZEL_WORKSPACE/tests/thrift"
+         |else
+         |  LAST_THRIFT=$$MIN_DEPTH
+         |  INDEX=2
+         |  for PART in $$(echo "$$SHALLOWEST_SOURCE" | tr '/' ' '); do
+         |    if [ "$$PART" == "thrift" ]; then
+         |      LAST_THRIFT=$$INDEX
+         |    fi
+         |    INDEX=$$((INDEX + 1))
+         |  done
+         |  ABSOLUTE_PREFIX="$$(echo "$$SHALLOWEST_SOURCE" | cut -d'/' -f"-$$LAST_THRIFT")"
+         |fi
+         |
+         |ZIP_TREE="$$(mktemp -d)"
+         |
+         |while [ $$# -gt 0 ]; do
+         |  if [[ $$1 == *.srcjar ]]; then
+         |    shift
+         |  else
+         |    PATH_WITHIN_ZIP="$${1#$$ABSOLUTE_PREFIX}"
+         |    mkdir -p "$$(dirname "$$ZIP_TREE/$$PATH_WITHIN_ZIP")"
+         |    cp "$$1" "$$ZIP_TREE/$$PATH_WITHIN_ZIP"
+         |    shift
+         |  fi
+         |done
+         |
+         |cd "$$ZIP_TREE"
+         |rm -f "$$SCROOGE_SOURCES_JAR"
+         |zip -qqr "$$SCROOGE_SOURCES_JAR" *
+         |cd - >/dev/null
+         |
+         |$scroogeWorker "@$$SCROOGE_INPUT"
+         |
+         |rm -rf "$$OUTPUT_DIRECTORY"
+         |unzip -qq "$$SCROOGE_OUTPUT" -d "$$OUTPUT_DIRECTORY"
+         |""".stripMargin
+    Files.write(scriptLocation.toNIO, content.getBytes("UTF-8"))
+    Files.setPosixFilePermissions(
+      scriptLocation.toNIO,
+      Set(
+        PosixFilePermission.GROUP_EXECUTE,
+        PosixFilePermission.GROUP_READ,
+        PosixFilePermission.OTHERS_EXECUTE,
+        PosixFilePermission.OTHERS_READ,
+        PosixFilePermission.OWNER_EXECUTE,
+        PosixFilePermission.OWNER_READ,
+        PosixFilePermission.OWNER_WRITE
+      ).asJava
+    )
+    scriptLocation
+  }
+
+  private def resources(
+      target: Target,
+      projectPackage: String
+  ): Option[List[Path]] =
+    target match {
+      case ResourcesTarget() =>
         // Infer resources root.
         // See https://github.com/bazelbuild/rules_scala/blob/6c16cff213b76a4126bdc850956046da5db1daaa/scala/private/rule_impls.bzl#L55
         val resourcesRoot =
@@ -794,9 +1004,28 @@ private class BloopBazel(
                 .getOrElse(projectPackage)
           }
         Some(List(project.common.workspace.resolve(resourcesRoot)))
-      } else {
+      case _ =>
         None
+    }
+
+  private def bloopProject(
+      inputsMapping: CopiedJars,
+      target: Target,
+      projectDirectory: Path
+  ): Config.Project = {
+    val projectName = BloopBazel.bloopName(target)
+    val projectPackage = projectName.takeWhile(_ != ':')
+    val (sources, sourcesGlobs) =
+      targetSourcesAndGlobs(target, projectDirectory)
+    val deps = dependencies(target).map(BloopBazel.bloopName)
+    val (javaSources, javaSourcesGlobs) =
+      sourcesInfo.get(target).map(_.javaSources).getOrElse(Nil) match {
+        case Nil => (Nil, Nil)
+        case labels =>
+          val (sources, globs) = labels.map(resolveJavaSources).unzip
+          (sources.flatten, globs.flatten)
       }
+    val targetDir = BloopBazel.targetDirectory(project, projectName)
     val jvmConfig = Config.JvmConfig(
       home = Some(bazelInfo.javaHome.toNIO),
       options = javaOptions(target)
@@ -832,14 +1061,16 @@ private class BloopBazel(
       classpath = cp,
       out = targetDir.resolve("out").toNIO,
       classesDir = targetDir.resolve("classes").toNIO,
-      resources = resources,
+      resources = resources(target, projectPackage),
       `scala` = scala(target),
       java = Some(java(target, forceFork)),
       sbt = None,
       test = Some(test(target)),
       platform = Some(jvmPlatform),
       resolution = resolution(inputsMapping.sourceJars),
-      tags = Some(List(if (isTest(target)) Tag.Test else Tag.Library))
+      tags = Some(List(if (isTest(target)) Tag.Test else Tag.Library)),
+      sourceGenerators =
+        sourceGenerators(inputsMapping, target, projectDirectory)
     )
   }
 
@@ -869,7 +1100,8 @@ private class BloopBazel(
       test = None,
       platform = None,
       resolution = None,
-      tags = None
+      tags = None,
+      sourceGenerators = None
     )
 
     addDsStoreWorkaround(emptyProject)
@@ -988,7 +1220,7 @@ private class BloopBazel(
 
   private def mainClass(target: Target): Option[String] =
     target match {
-      case JvmApp(_, bin) =>
+      case JvmAppTarget(_, bin) =>
         mainClass(bin)
       case _ =>
         Bazel
@@ -998,13 +1230,20 @@ private class BloopBazel(
     }
 
   private val rawOutputToTarget: Map[Artifact, Target] = {
-    val mappings =
-      for {
-        target <- importedTargets
-        label = target.getRule().getName()
-        artifact <- actionGraph.outputsOf(label)
-      } yield artifact -> target
-    mappings.toMap
+    importedTargets.flatMap {
+      case ThriftTarget(target, root, "scala") =>
+        actionGraph
+          .outputsOfMnemonic(root.getRule().getName(), "Scalac")
+          .map(_ -> target)
+      case ThriftTarget(target, root, "java") =>
+        actionGraph
+          .outputsOfMnemonic(root.getRule().getName(), "Javac")
+          .map(_ -> target)
+      case target =>
+        actionGraph
+          .outputsOf(target.getRule.getName())
+          .map(_ -> target)
+    }.toMap
   }
 
   private val targetDependencies: Map[Target, List[Target]] = {
@@ -1020,45 +1259,43 @@ private class BloopBazel(
     }.toMap
   }
 
-  private val scalaBinaryTargets: Map[String, Target] = {
-    importedTargets.collect {
-      case target if target.getRule().getRuleClass() == "scala_binary" =>
-        target.getRule().getName() -> target
-    }.toMap
-  }
+  private val targetsMap: Map[String, Target] =
+    importedTargets
+      .map(target => target.getRule.getName -> target)
+      .toMap
 
   private def targetSourcesAndGlobs(
       target: Target,
       projectDirectory: Path
-  ): (List[String], Option[PantsGlobs]) = {
-    if (isResources(target)) (Nil, None)
-    else {
-      val infos = sourcesInfo.get(target)
-      val pantsGlobs = infos.map(i => PantsGlobs(i.include, i.exclude))
-      pantsGlobs match {
-        case Some(globs) if globs.isEmpty =>
-          // Finding empty globs means that buildozer was able to extract the target from
-          // the build file, but no sources were set. This means we need to use the default
-          // globs.
-          (Nil, Some(defaultGlobs(target)))
-        case Some(globs) =>
-          // Globs may need to be rebased if the target was rebased to avoid base directory
-          // conflicts.
-          (Nil, Some(rebaseGlobs(globs, target, projectDirectory)))
-        case None =>
-          // If the target doesn't appear in `targetGlobs`, it means that buildozer was not
-          // able to read it from the build file. It's probably generated by a macro, so we
-          // hardcode only the sources that Bazel knows about.
-          val sources = Bazel
-            .getAttribute(target, "srcs")
-            .map(_.getStringListValueList().asScala.toList.map {
-              _.replaceAllLiterally(":", File.separator).stripPrefix("//")
-            })
-            .getOrElse(Nil)
-          (sources, None)
-      }
+  ): (List[String], Option[PantsGlobs]) =
+    target match {
+      case ResourcesTarget() => (Nil, None)
+      case _ =>
+        val infos = sourcesInfo.get(target)
+        val pantsGlobs = infos.map(i => PantsGlobs(i.include, i.exclude))
+        pantsGlobs match {
+          case Some(globs) if globs.isEmpty =>
+            // Finding empty globs means that buildozer was able to extract the target from
+            // the build file, but no sources were set. This means we need to use the default
+            // globs.
+            (Nil, Some(defaultGlobs(target)))
+          case Some(globs) =>
+            // Globs may need to be rebased if the target was rebased to avoid base directory
+            // conflicts.
+            (Nil, Some(rebaseGlobs(globs, target, projectDirectory)))
+          case None =>
+            // If the target doesn't appear in `targetGlobs`, it means that buildozer was not
+            // able to read it from the build file. It's probably generated by a macro, so we
+            // hardcode only the sources that Bazel knows about.
+            val sources = Bazel
+              .getAttribute(target, "srcs")
+              .map(_.getStringListValueList().asScala.toList.map {
+                _.replaceAllLiterally(":", File.separator).stripPrefix("//")
+              })
+              .getOrElse(Nil)
+            (sources, None)
+        }
     }
-  }
 
   private def resolveJavaSources(
       label: String
@@ -1127,23 +1364,14 @@ private class BloopBazel(
   }
 
   private def defaultGlobs(target: Target): PantsGlobs = {
-    generatorFunction(target) match {
+    Bazel.generatorFunction(target) match {
       case Some("scala_library") => PantsGlobs("*.scala" :: Nil, Nil)
       case Some("java_library") => PantsGlobs("*.java" :: Nil, Nil)
       case Some("junit_tests") =>
         PantsGlobs("*Test.scala" :: "*Spec.scala" :: "*Test.java" :: Nil, Nil)
+      case Some("create_thrift_libraries") => PantsGlobs("*.thrift" :: Nil, Nil)
       case _ => PantsGlobs.empty
     }
-  }
-
-  private def generatorFunction(target: Target): Option[String] = {
-    Bazel.getAttribute(target, "generator_function").map(_.getStringValue())
-  }
-
-  private def isResources(target: Target): Boolean = {
-    target.getRule().getRuleClass() == "scala_library" && generatorFunction(
-      target
-    ).exists(_ == "resources")
   }
 
   private val sourceRootPattern = FileSystems.getDefault.getPathMatcher(
@@ -1167,15 +1395,53 @@ private class BloopBazel(
     loop(dir)
   }
 
-  private object JvmApp {
-    def unapply(target: Target): Option[(Target, Target)] = {
-      if (target.getRule().getRuleClass() != "_jvm_app") None
-      else
-        for {
-          binaryLabel <- Bazel.getAttribute(target, "binary")
-          binaryTarget <- scalaBinaryTargets.get(binaryLabel.getStringValue())
-        } yield (target, binaryTarget)
+  private def copyJars(
+      bazelInfo: BazelInfo,
+      project: Project,
+      importedTargets: List[Target],
+      actionGraph: ActionGraph,
+      rawTargetInputs: Map[Target, List[Artifact]],
+      rawRuntimeTargetInputs: Map[Target, List[Artifact]]
+  ): Try[CopiedJars] = {
+    val fromOutputs = importedTargets.flatMap {
+      case ThriftTarget(target, root, mnemonic) =>
+        actionGraph.outputsOfMnemonic(root.getRule().getName(), mnemonic).map {
+          output =>
+            output -> BloopBazel
+              .targetDirectory(project, BloopBazel.bloopName(target))
+              .resolve("classes")
+              .toNIO
+        }
+      case ThriftRoot(root, scala, java) =>
+        Nil
+      case target =>
+        actionGraph.outputsOf(target.getRule.getName).map { output =>
+          output -> BloopBazel
+            .targetDirectory(project, BloopBazel.bloopName(target))
+            .resolve("classes")
+            .toNIO
+        }
+    }.toMap
+    val allInputs =
+      rawTargetInputs.valuesIterator.flatten.toSet ++ rawRuntimeTargetInputs.valuesIterator.flatten.toSet -- fromOutputs.keySet
+
+    val fromInputs =
+      BloopBazel.copyImmutableJars(
+        bazelInfo,
+        project.bspRoot.toNIO,
+        allInputs,
+        actionGraph
+      )
+
+    fromInputs.map {
+      case CopiedJars(inputMappings, sourceJars) =>
+        CopiedJars(inputMappings ++ fromOutputs, sourceJars)
     }
+  }
+
+  private def isThriftTarget(target: Target): Boolean = {
+    val ruleClass = target.getRule.getRuleClass
+    ruleClass == "thrift_library" || ruleClass == "scrooge_scala_library" || ruleClass == "scrooge_java_library"
   }
 
 }
