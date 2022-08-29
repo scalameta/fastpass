@@ -89,6 +89,7 @@ object BloopBazel {
       .getFromCache(cachedExportName) { export =>
         app.info("Using cached Fastpass export.")
         BloopBazel.fromExport(
+          app,
           project,
           bazel,
           bazelInfo,
@@ -120,6 +121,7 @@ object BloopBazel {
               rawRuntimeTargetInputs(importedTargets, actionGraph)
           } yield {
             val bloopBazel = new BloopBazel(
+              app,
               project,
               bazel,
               bazelInfo,
@@ -146,6 +148,7 @@ object BloopBazel {
   }
 
   private def fromExport(
+      app: CliApp,
       project: Project,
       bazel: Bazel,
       bazelInfo: BazelInfo,
@@ -187,6 +190,7 @@ object BloopBazel {
       )
 
     new BloopBazel(
+      app,
       project,
       bazel,
       bazelInfo,
@@ -471,6 +475,7 @@ object BloopBazel {
 }
 
 private class BloopBazel(
+    app: CliApp,
     project: Project,
     bazel: Bazel,
     bazelInfo: BazelInfo,
@@ -510,14 +515,89 @@ private class BloopBazel(
     )
   }
 
+  // IntelliJ supports only a single target per directory. When targets share the same root
+  // directory, we try to find a meaningful unique root directory for every target. If that's not
+  // possible, we show a warning to the user.
+  private def assignRootDirectory(
+      targets: List[Target]
+  ): List[(Path, Target)] = {
+    val directoryToTargets = importedTargets.groupBy { target =>
+      val projectName = BloopBazel.bloopName(target)
+      val projectPackage = projectName.takeWhile(_ != ':')
+      project.common.workspace.resolve(projectPackage)
+    }
+    val (unique, duplicated) = directoryToTargets.partition(_._2.length == 1)
+
+    val deduplicated = duplicated.foldLeft(unique) {
+      case (acc, (directory, targets)) =>
+        deduplicate(acc, directory, targets)
+    }
+
+    deduplicated.toList.flatMap {
+      case (path, target :: Nil) =>
+        (path, target) :: Nil
+      case (path, targets) =>
+        app.warn(
+          s"""The base directory '$path' is shared by the following targets:
+             |${targets.map(_.getRule.getName).mkString(", ")}
+             |
+             |Some of these targets may not appear in IntelliJ and cause other issues. To fix
+             |this problem, move these targets or their sources to a dedicated directory.
+             |See http://go/111""".stripMargin
+        )
+        targets.map((path, _))
+    }
+  }
+
+  @annotation.tailrec
+  private def deduplicate(
+      acc: Map[Path, List[Target]],
+      directory: Path,
+      targets: List[Target]
+  ): Map[Path, List[Target]] = {
+    targets match {
+      case Nil =>
+        acc
+      case target :: rest =>
+        val currentSourceDirs = getAttribute(target, "srcs")
+          .map(_.getStringListValueList.asScala.toList)
+          .getOrElse(Nil)
+          .map { src =>
+            val path = src.stripPrefix("//").replace(':', '/')
+            path.take(path.lastIndexOf('/'))
+          }
+          .distinct
+
+        // Look at the existing sources of the target. If they all live in the same directory,
+        // try to use that directory as base directory for the target. Otherwise, record the conflict.
+        val newMatch = currentSourceDirs match {
+          case root :: Nil =>
+            val rootPath = project.common.workspace.resolve(root)
+            if (!acc.contains(rootPath))
+              rootPath -> List(target)
+            else
+              directory -> (target :: acc.getOrElse(directory, Nil))
+
+          case _ =>
+            directory -> (target :: acc.getOrElse(directory, Nil))
+        }
+
+        deduplicate(acc + newMatch, directory, rest)
+    }
+  }
+
   private def assembleBloopProjects(
       inputsMapping: CopiedJars
   ): Try[List[Config.Project]] = {
+    val targetAndDirectory = assignRootDirectory(importedTargets)
     ProgressConsole
       .map(
         "Assembling Bloop configurations",
-        importedTargets
-      )(bloopProject(inputsMapping, _))
+        targetAndDirectory
+      ) {
+        case (directory, target) =>
+          bloopProject(inputsMapping, target, directory)
+      }
       .map { organicProjects =>
         val sourceRoots = BloopBazel.sourceRoots(
           bazelInfo.workspace,
@@ -670,12 +750,13 @@ private class BloopBazel(
 
   private def bloopProject(
       inputsMapping: CopiedJars,
-      target: Target
+      target: Target,
+      projectDirectory: Path
   ): Config.Project = {
     val projectName = BloopBazel.bloopName(target)
     val projectPackage = projectName.takeWhile(_ != ':')
-    val projectDirectory = project.common.workspace.resolve(projectPackage)
-    val (sources, sourcesGlobs) = targetSourcesAndGlobs(target)
+    val (sources, sourcesGlobs) =
+      targetSourcesAndGlobs(target, projectDirectory)
     val deps = dependencies(target).map(BloopBazel.bloopName)
     val targetDir =
       BloopBazel.targetDirectory(project, BloopBazel.bloopName(target))
@@ -932,7 +1013,8 @@ private class BloopBazel(
   }
 
   private def targetSourcesAndGlobs(
-      target: Target
+      target: Target,
+      projectDirectory: Path
   ): (List[String], Option[PantsGlobs]) =
     if (isResources(target)) (Nil, None)
     else
@@ -943,7 +1025,9 @@ private class BloopBazel(
           // globs.
           (Nil, Some(defaultGlobs(target)))
         case Some(globs) =>
-          (Nil, Some(globs))
+          // Globs may need to be rebased if the target was rebased to avoid base directory
+          // conflicts.
+          (Nil, Some(rebaseGlobs(globs, target, projectDirectory)))
         case None =>
           // If the target doesn't appear in `targetGlobs`, it means that buildozer was not
           // able to read it from the build file. It's probably generated by a macro, so we
@@ -959,6 +1043,23 @@ private class BloopBazel(
 
   private def isTest(target: Target): Boolean = {
     target.getRule().getRuleClass() == "scala_junit_test"
+  }
+
+  private def rebaseGlobs(
+      globs: PantsGlobs,
+      target: Target,
+      baseDirectory: Path
+  ): PantsGlobs = {
+    val projectName = BloopBazel.bloopName(target)
+    val projectPackage = projectName.takeWhile(_ != ':')
+    val realBaseDirectory = project.common.workspace.resolve(projectPackage)
+    if (baseDirectory.startsWith(realBaseDirectory)) {
+      val toStrip = realBaseDirectory.relativize(baseDirectory).toString + "/"
+      globs.copy(
+        include = globs.include.map(_.stripPrefix(toStrip)),
+        exclude = globs.exclude.map(_.stripPrefix(toStrip))
+      )
+    } else globs
   }
 
   private def defaultGlobs(target: Target): PantsGlobs = {
