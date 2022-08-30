@@ -106,12 +106,14 @@ object BloopBazel {
             dependencies <- bazel.dependenciesToBuild(
               project.targets,
               importableRules,
-              forbiddenGenerators
+              forbiddenGenerators,
+              forbiddenTags
             )
             importedTargets <- bazel.targetsInfos(
               project.targets,
               importableRules,
-              forbiddenGenerators
+              forbiddenGenerators,
+              forbiddenTags
             )
             actions <- bazel.aquery(importedTargets.map(_.getRule.getName))
             actionGraph = ActionGraph(actions)
@@ -425,6 +427,11 @@ object BloopBazel {
   private val forbiddenGenerators: Map[String, List[String]] = Map(
     "" -> List("create_datasets", "antlr"),
     "scala_library" -> List("jvm_app")
+  )
+
+  private val forbiddenTags: List[String] = List(
+    "no-ide",
+    "manual"
   )
 
   private val cachedExportName: String = "fastpass-export.json"
