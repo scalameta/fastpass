@@ -6,6 +6,7 @@ import java.nio.file.Files
 import scala.meta.internal.fastpass.FastpassEnrichments._
 import scala.meta.internal.fastpass.Time
 import scala.meta.internal.fastpass.Timer
+import scala.meta.internal.fastpass.bazelbuild.Bazel
 import scala.meta.internal.fastpass.bazelbuild.BloopBazel
 import scala.meta.internal.fastpass.pantsbuild.Export
 import scala.meta.internal.fastpass.pantsbuild.commands.SharedPantsCommand
@@ -144,7 +145,28 @@ object CreateCommand extends Command[CreateOptions]("create") {
 
       create.copy(bazel = false, forcePants = true, targets = targets)
     } else {
-      create
+      val targets = create.targets.map { target =>
+        // Don't touch targets that look like Bazel queries
+        if (!Bazel.isPlainSpec(target)) {
+          target
+        }
+        // Translate foo/bar to foo/bar/... This is inconsistent with Pants (foo/bar:bar),
+        // but more likely to be what the user meant: import directory recursively.
+        else if (
+          !target.contains(":") && !target.endsWith("/...") && isDir(target)
+        ) {
+          target + "/..."
+        }
+        // Translate foo/bar:: to foo/bar/...
+        else if (target.endsWith("::") && isDir(target.stripSuffix("::"))) {
+          target.stripSuffix("::") + "/..."
+        }
+        // Translate foo/bar: to foo/bar:all
+        else if (target.endsWith(":") && isDir(target.stripSuffix(":"))) {
+          target + "all"
+        } else target
+      }
+      create.copy(bazel = true, forcePants = false, targets = targets)
     }
 
   }
