@@ -181,10 +181,16 @@ class Bazel(bazelPath: Path, cwd: Path) {
   def targetsInfos(
       specs: List[String],
       supportedRules: List[String],
-      forbiddenGenerators: Map[String, List[String]]
+      forbiddenGenerators: Map[String, List[String]],
+      forbiddenTags: List[String]
   ): Try[List[Target]] = {
     val queryStr =
-      importableTargetsQuery(specs, supportedRules, forbiddenGenerators)
+      importableTargetsQuery(
+        specs,
+        supportedRules,
+        forbiddenGenerators,
+        forbiddenTags
+      )
     query("Inspecting importable targets", queryStr)
       .map(getTargets)
       .flatMap(dealiasTargets)
@@ -193,33 +199,39 @@ class Bazel(bazelPath: Path, cwd: Path) {
   def dependenciesToBuild(
       specs: List[String],
       supportedRules: List[String],
-      forbiddenGenerators: Map[String, List[String]]
+      forbiddenGenerators: Map[String, List[String]],
+      forbiddenTags: List[String]
   ): Try[List[String]] = {
-    importDependencies(specs, supportedRules, forbiddenGenerators).map {
-      targets =>
-        targets.map { target =>
-          val rule = target.getRule()
-          val label = rule.getName()
-          val ruleClass = rule.getRuleClass()
-          if (
-            label.startsWith(
-              "//3rdparty/jvm/"
-            ) && ruleClass == "third_party_jvm_import"
-          ) {
-            val pkg = label.stripPrefix("//").takeWhile(_ != ':')
-            val name = label.substring(label.indexOf(':') + 1)
-            s"@maven//:${pkg}_${name}"
-          } else {
-            label
-          }
+    importDependencies(
+      specs,
+      supportedRules,
+      forbiddenGenerators,
+      forbiddenTags
+    ).map { targets =>
+      targets.map { target =>
+        val rule = target.getRule()
+        val label = rule.getName()
+        val ruleClass = rule.getRuleClass()
+        if (
+          label.startsWith(
+            "//3rdparty/jvm/"
+          ) && ruleClass == "third_party_jvm_import"
+        ) {
+          val pkg = label.stripPrefix("//").takeWhile(_ != ':')
+          val name = label.substring(label.indexOf(':') + 1)
+          s"@maven//:${pkg}_${name}"
+        } else {
+          label
         }
+      }
     }
   }
 
   private def importDependencies(
       specs: List[String],
       supportedRules: List[String],
-      forbiddenGenerators: Map[String, List[String]]
+      forbiddenGenerators: Map[String, List[String]],
+      forbiddenTags: List[String]
   ): Try[List[Target]] = {
     val importableSpecs =
       specs
@@ -227,7 +239,8 @@ class Bazel(bazelPath: Path, cwd: Path) {
           importableTargetsQuery(
             spec :: Nil,
             supportedRules,
-            forbiddenGenerators
+            forbiddenGenerators,
+            forbiddenTags
           )
         )
         .mkString(" + ")
@@ -241,7 +254,8 @@ class Bazel(bazelPath: Path, cwd: Path) {
   private def importableTargetsQuery(
       specs: List[String],
       supportedRules: List[String],
-      forbiddenGenerators: Map[String, List[String]]
+      forbiddenGenerators: Map[String, List[String]],
+      forbiddenTags: List[String]
   ): String = {
     val targets = specs.mkString(" + ")
     val pattern = supportedRules.mkString("|")
@@ -256,13 +270,18 @@ class Bazel(bazelPath: Path, cwd: Path) {
           "|"
         )}", kind($rule, $$baseQuery))""".stripMargin :: acc
     }
+    val excludedTags = s"""attr(tags, "${forbiddenTags.mkString(
+      "|"
+    )}", $$baseQuery)"""
 
     excludedGenerators match {
       case Nil =>
-        baseQuery
+        s"""let baseQuery = $baseQuery in
+           |($$baseQuery - ${excludedTags}""".stripMargin
       case generators =>
         s"""let baseQuery = $baseQuery in
-           |($$baseQuery - ${generators.mkString(" - ")})""".stripMargin
+           |($$baseQuery - ${generators.mkString(" - ")}
+           | - ${excludedTags})""".stripMargin
     }
   }
 
