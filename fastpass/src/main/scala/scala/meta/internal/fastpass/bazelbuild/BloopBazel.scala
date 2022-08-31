@@ -746,13 +746,11 @@ private class BloopBazel(
       case JvmApp(_, bin) =>
         javaOptions(bin)
       case _ =>
-        Bazel.getAttribute(target, "jvm_flags") match {
-          case Some(attr) =>
-            val flags = attr.getStringListValueList().asScala.toList
-            s"-Duser.dir=${bazelInfo.workspace}" :: flags
-          case None =>
-            Nil
-        }
+        val options = Bazel
+          .getAttribute(target, "jvm_flags")
+          .map(_.getStringListValueList().asScala.toList)
+          .getOrElse(Nil)
+        s"-Duser.dir=${bazelInfo.workspace}" :: options
     }
 
   private def bloopProject(
