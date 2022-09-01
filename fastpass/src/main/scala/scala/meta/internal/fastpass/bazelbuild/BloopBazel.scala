@@ -1121,7 +1121,8 @@ private class BloopBazel(
     generatorFunction(target) match {
       case Some("scala_library") => PantsGlobs("*.scala" :: Nil, Nil)
       case Some("java_library") => PantsGlobs("*.java" :: Nil, Nil)
-      case Some("junit_tests") => PantsGlobs("*.scala" :: "*.java" :: Nil, Nil)
+      case Some("junit_tests") =>
+        PantsGlobs("*Test.scala" :: "*Spec.scala" :: "*Test.java" :: Nil, Nil)
       case _ => PantsGlobs.empty
     }
   }
