@@ -1067,32 +1067,41 @@ private class BloopBazel(
     val baseDirectory = project.common.workspace
       .resolve(packageName.stripPrefix("//"))
 
-    importedTargets.find(_.getRule.getName == label) match {
-      // The target is a target that we imported, we can simply reuse the information
-      case Some(target) =>
-        val targetBase =
-          project.common.workspace.resolve(Bazel.enclosingPackage(target))
-        val (sources, pantsGlobs) = targetSourcesAndGlobs(target, targetBase)
-        (
-          sources.map(baseDirectory.resolve(_)),
-          pantsGlobs.toList.map(
-            _.bloopConfig(project.common.workspace, baseDirectory)
-          )
-        )
-
-      // The target is not an imported target, we need to find this information
-      case None =>
-        val absoluteLabel = if (label.startsWith("//")) label else "//" + label
-        bazel.groupedSourcesGlobs(packageName :: Nil).get(absoluteLabel) match {
-          case None =>
-            (Nil, Nil)
-          case Some(SourcesInfo(include, exclude, _)) =>
-            (
-              Nil,
-              PantsGlobs(include, exclude)
-                .bloopConfig(project.common.workspace, baseDirectory) :: Nil
+    // The label may be given in short form (foo/bar, which means foo/bar:bar)
+    if (!label.contains(":")) {
+      val targetName = baseDirectory.getFileName().toString()
+      resolveJavaSources(s"$label:$targetName")
+    } else {
+      importedTargets.find(_.getRule.getName == label) match {
+        // The target is a target that we imported, we can simply reuse the information
+        case Some(target) =>
+          val targetBase =
+            project.common.workspace.resolve(Bazel.enclosingPackage(target))
+          val (sources, pantsGlobs) = targetSourcesAndGlobs(target, targetBase)
+          (
+            sources.map(baseDirectory.resolve(_)),
+            pantsGlobs.toList.map(
+              _.bloopConfig(project.common.workspace, baseDirectory)
             )
-        }
+          )
+
+        // The target is not an imported target, we need to find this information
+        case None =>
+          val absoluteLabel =
+            if (label.startsWith("//")) label else "//" + label
+          bazel
+            .groupedSourcesGlobs(packageName :: Nil)
+            .get(absoluteLabel) match {
+            case None =>
+              (Nil, Nil)
+            case Some(SourcesInfo(include, exclude, _)) =>
+              (
+                Nil,
+                PantsGlobs(include, exclude)
+                  .bloopConfig(project.common.workspace, baseDirectory) :: Nil
+              )
+          }
+      }
     }
   }
 
