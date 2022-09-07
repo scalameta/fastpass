@@ -122,10 +122,16 @@ object BloopBazel {
               forbiddenTags
             )
             extractors = new Extractors(importedTargets)
-            // Also query the action graph of the Scrooge worker, so that we know where to find the
-            // script to run to regenerate the sources.
+            // Additional labels for which to query the action graph:
+            //  - the Scrooge work, so that we know where to find the script to run to regenerate
+            //    the sources.
+            //  - the platformclasspath, so that we know which artifacts it produces, and we can
+            //    exclude them from the compilation classpath. Bloop will provide the ones from the
+            //    environment. Keeping that from Bazel will break go to definition on JDK classes.
             actionGraphLabels =
-              Bazel.ScroogeWorkerLabel :: importedTargets.map(_.getRule.getName)
+              Bazel.ScroogeWorkerLabel ::
+                Bazel.PlatformClasspathLabel ::
+                importedTargets.map(_.getRule.getName)
             actions <- bazel.aquery(actionGraphLabels)
             actionGraph = ActionGraph(actions)
             sourcesInfo <- targetToSources(extractors, importedTargets, bazel)
@@ -427,9 +433,9 @@ object BloopBazel {
     "alias" -> Set(),
     "target_union" -> Set(),
     "scala_library" -> Set("Scalac"),
-    "_java_library" -> Set("Scalac"),
+    "_java_library" -> Set("Scalac", "Javac"),
     "_scala_macro_library" -> Set("Scalac"),
-    "scala_junit_test" -> Set("Scalac"),
+    "scala_junit_test" -> Set("Scalac", "Javac"),
     "scala_binary" -> Set("Middleman"),
     "_jvm_app" -> Set(),
     "scrooge_scala_library" -> Set("ScroogeRule", "Scalac"),
@@ -1422,8 +1428,18 @@ private class BloopBazel(
             .toNIO
         }
     }.toMap
+    //
+    // Find out the artifacts produced by the platform classpath target, so that we can exclude them
+    // from the classpaths of all targets. Bloop will configure the right ones from the environments.
+    // Leaving the artifacts provided by Bazel would break go to definition on JDK classes.
+    val platformClasspathArtifacts =
+      actionGraph.outputsOf(Bazel.PlatformClasspathLabel)
+
     val allInputs =
-      rawTargetInputs.valuesIterator.flatten.toSet ++ rawRuntimeTargetInputs.valuesIterator.flatten.toSet -- fromOutputs.keySet
+      rawTargetInputs.valuesIterator.flatten.toSet ++
+        rawRuntimeTargetInputs.valuesIterator.flatten.toSet --
+        fromOutputs.keySet --
+        platformClasspathArtifacts
 
     val fromInputs =
       BloopBazel.copyImmutableJars(
