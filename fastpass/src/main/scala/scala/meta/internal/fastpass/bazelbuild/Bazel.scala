@@ -50,6 +50,9 @@ object Bazel {
     "@io_bazel_rules_scala//src/scala/scripts:scrooge_worker"
   val ScroogeWorkerMnemonic = "TemplateExpand"
 
+  val PlatformClasspathLabel =
+    "@bazel_tools//tools/jdk:platformclasspath"
+
   private val extToExclude = List(
     ".semanticdb",
     ".deployjar",
