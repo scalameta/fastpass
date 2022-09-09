@@ -127,11 +127,7 @@ object CreateCommand extends Command[CreateOptions]("create") {
         create.common.workspace.resolve(target.stripPrefix("//"))
       )
 
-    // If we find a recursive glob of targets, then we know it's a pants import
-    val isPants =
-      create.forcePants || create.targets.exists(tgt => tgt.endsWith("::"))
-
-    if (isPants) {
+    if (create.forcePants) {
       val targets = create.targets.map { target =>
         // Translate foo/bar/... to foo/bar::
         if (target.endsWith("/...") && isDir(target.stripSuffix("/..."))) {
