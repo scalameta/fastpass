@@ -123,14 +123,18 @@ object BloopBazel {
             )
             extractors = new Extractors(importedTargets)
             // Additional labels for which to query the action graph:
-            //  - the Scrooge work, so that we know where to find the script to run to regenerate
+            //  - the Scrooge worker, so that we know where to find the script to run to regenerate
             //    the sources.
             //  - the platformclasspath, so that we know which artifacts it produces, and we can
             //    exclude them from the compilation classpath. Bloop will provide the ones from the
             //    environment. Keeping that from Bazel will break go to definition on JDK classes.
+            //  - the protobuf_java ijar, so that we can swap it for the actual full jar. Having the
+            //    ijar on the compilation classpath breaks zinc, which will crash while analyzing
+            //    classes that inherit from classes provided by the ijar.
             actionGraphLabels =
               Bazel.ScroogeWorkerLabel ::
                 Bazel.PlatformClasspathLabel ::
+                Bazel.ProtobufJava ::
                 importedTargets.map(_.getRule.getName)
             actions <- bazel.aquery(actionGraphLabels)
             actionGraph = ActionGraph(actions)
@@ -315,8 +319,49 @@ object BloopBazel {
         }
       }
       .map { _ =>
-        CopiedJars(inputMapping.toMap, sourceJars.toList)
+        val mappings =
+          substituteProtobufJavaIjar(inputMapping.toMap, bazelInfo, actionGraph)
+        CopiedJars(mappings, sourceJars.toList)
       }
+  }
+
+  /**
+   * Substitute the Protobuf Java ijar for the full jar, if they exist.
+   *
+   * Having the ijar on the compilation classpath causes issues with Zinc during analysis.
+   *
+   * @param mappings The current mappings between artifact and path on disk
+   * @param bazelInfo The path information from Bazel
+   * @param actionGraph The action graph
+   * @return The new mappings, where the ijar artifact is mapped to the full jar path.
+   */
+  private def substituteProtobufJavaIjar(
+      mappings: Map[Artifact, Path],
+      bazelInfo: BazelInfo,
+      actionGraph: ActionGraph
+  ): Map[Artifact, Path] = {
+    val protobufJavaIJar =
+      actionGraph
+        .outputsOfMnemonic(Bazel.ProtobufJava, Bazel.ProtobufJavaMnemonic)
+        .headOption
+        .filter { artifact =>
+          val path = actionGraph.pathOf(artifact)
+          val fullPath = bazelInfo.executionRoot.toNIO.resolve(path)
+          Files.exists(fullPath)
+        }
+    val protobufJavaFullJar =
+      actionGraph
+        .transitiveInputsOf(Bazel.ProtobufJava, Set(Bazel.ProtobufJavaMnemonic))
+        .headOption
+        .map(actionGraph.pathOf)
+        .map(bazelInfo.executionRoot.toNIO.resolve)
+        .filter(Files.exists(_))
+    (protobufJavaIJar, protobufJavaFullJar) match {
+      case (Some(iJar), Some(fullJar)) =>
+        mappings + (iJar -> fullJar)
+      case _ =>
+        mappings
+    }
   }
 
   private def generatedSourceDirectory(

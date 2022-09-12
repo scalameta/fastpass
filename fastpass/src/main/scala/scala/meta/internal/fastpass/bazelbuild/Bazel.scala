@@ -53,6 +53,11 @@ object Bazel {
   val PlatformClasspathLabel =
     "@bazel_tools//tools/jdk:platformclasspath"
 
+  val ProtobufJava =
+    "@com_google_protobuf_protobuf_java//:com_google_protobuf_protobuf_java"
+  val ProtobufJavaMnemonic =
+    "JavaIjar"
+
   private val extToExclude = List(
     ".semanticdb",
     ".deployjar",
