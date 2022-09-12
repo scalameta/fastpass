@@ -593,7 +593,7 @@ private class BloopBazel(
   private def assignRootDirectory(
       targets: List[Target]
   ): List[(Path, Target)] = {
-    val directoryToTargets = importedTargets.groupBy { target =>
+    val directoryToTargets = targets.groupBy { target =>
       val projectName = BloopBazel.bloopName(target)
       val projectPackage = projectName.takeWhile(_ != ':')
       project.common.workspace.resolve(projectPackage)
@@ -666,7 +666,10 @@ private class BloopBazel(
   private def assembleBloopProjects(
       inputsMapping: CopiedJars
   ): Try[List[Config.Project]] = {
-    val targetAndDirectory = assignRootDirectory(importedTargets)
+    val targets =
+      importedTargets.filterNot(_.getRule.getRuleClass == "thrift_library")
+
+    val targetAndDirectory = assignRootDirectory(targets)
     ProgressConsole
       .map(
         "Assembling Bloop configurations",
@@ -679,7 +682,7 @@ private class BloopBazel(
         val sourceRoots = BloopBazel.sourceRoots(
           bazelInfo.workspace,
           project.targets,
-          importedTargets.map(_.getRule.getName)
+          targets.map(_.getRule.getName)
         )
         def isEmptyGlobs(globsOpt: Option[List[Config.SourcesGlobs]]): Boolean =
           globsOpt match {
@@ -963,7 +966,7 @@ private class BloopBazel(
          |SHALLOWEST_SOURCE=""
          |MIN_DEPTH=1000
          |for ARG in "$$@"; do
-         |  if [[ "$$ARG" == *.srcjar ]]; then
+         |  if [[ "$$ARG" == *.srcjar || "$$ARG" == *.jar ]]; then
          |    continue
          |  else
          |    CURRENT_DEPTH="$$(($$(echo "$$ARG" | tr -c -d '/' | wc -c) + 1))"
@@ -993,7 +996,7 @@ private class BloopBazel(
          |ZIP_TREE="$$(mktemp -d)"
          |
          |while [ $$# -gt 0 ]; do
-         |  if [[ $$1 == *.srcjar ]]; then
+         |  if [[ $$1 == *.srcjar || $$1 == *.jar ]]; then
          |    shift
          |  else
          |    PATH_WITHIN_ZIP="$${1#$$ABSOLUTE_PREFIX}"
@@ -1247,26 +1250,32 @@ private class BloopBazel(
         _.getStringListValueList().asScala.toList
       )
 
-    for {
-      opts <- options
-    } yield Config.Scala(
-      organization = "org.scala-lang",
-      name = "scala-compiler",
-      version = "2.12.15",
-      options = opts,
-      jars = scalaJars,
-      analysis = None,
-      setup = Some(
-        Config.CompileSetup(
-          order = Config.Mixed,
-          addLibraryToBootClasspath = true,
-          addCompilerToClasspath = false,
-          addExtraJarsToClasspath = false,
-          manageBootClasspath = true,
-          filterLibraryFromClasspath = true
+    options match {
+      // Make sure we configure Scala for Thrift targets
+      case None if target.getRule.getRuleClass != "scrooge_scala_library" =>
+        None
+      case opts =>
+        Some(
+          Config.Scala(
+            organization = "org.scala-lang",
+            name = "scala-compiler",
+            version = "2.12.15",
+            options = opts.getOrElse(Nil),
+            jars = scalaJars,
+            analysis = None,
+            setup = Some(
+              Config.CompileSetup(
+                order = Config.Mixed,
+                addLibraryToBootClasspath = true,
+                addCompilerToClasspath = false,
+                addExtraJarsToClasspath = false,
+                manageBootClasspath = true,
+                filterLibraryFromClasspath = true
+              )
+            )
+          )
         )
-      )
-    )
+    }
   }
 
   private def mainClass(target: Target): Option[String] =
