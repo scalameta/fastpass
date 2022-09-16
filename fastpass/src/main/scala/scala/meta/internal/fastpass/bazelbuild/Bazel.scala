@@ -172,7 +172,12 @@ class Bazel(bazelPath: Path, cwd: Path) {
     }
   }
 
-  def aquery(targets: List[String]): Try[ActionGraphContainer] = {
+  def aquery(
+      targets: List[String],
+      retry: Integer
+  ): Try[ActionGraphContainer] = {
+    val incRetry = retry + 1
+    val bazelInternalError = "FATAL: bazel crashed due to an internal error."
     ProgressConsole.auto("Querying action graph") { err =>
       val out = new ByteArrayOutputStream
       val cmd = List(bazel, "aquery", targets.mkString(" + ")) ++ List(
@@ -181,10 +186,20 @@ class Bazel(bazelPath: Path, cwd: Path) {
         // Use textproto instead of proto, see https://github.com/bazelbuild/bazel/issues/12984
         "--output=textproto"
       )
-      val code = run(cmd, out, err)
+      var code = -1
+      try {
+        code = runWithErrorCatching(cmd, out, err, bazelInternalError)
+      } catch {
+        case e: Exception =>
+          if (incRetry <= 2 && e.getMessage == bazelInternalError) {
+            aquery(targets, incRetry)
+          }
+      }
+
       if (code != 0) {
         throw new MessageOnlyException("Could not query action graph")
       }
+
       val in =
         new InputStreamReader(new ByteArrayInputStream(out.toByteArray()))
       val builder = ActionGraphContainer.newBuilder()
@@ -447,6 +462,38 @@ class Bazel(bazelPath: Path, cwd: Path) {
     Process(cmd, cwd.toFile)
       .run(io)
       .exitValue()
+  }
+
+  def runWithErrorCatching(
+      cmd: List[String],
+      out: ByteArrayOutputStream,
+      err: OutputStream = FileUtils.NullOutputStream,
+      exc: String
+  ): Int = {
+    val errByteArrayOutputStream = new ByteArrayOutputStream
+    val io =
+      new ProcessIO(
+        _ => (),
+        FileUtils.copy(_, out),
+        FileUtils.copy(_, errByteArrayOutputStream)
+      )
+
+    val errWriter = new PrintWriter(err)
+    errWriter.println(s"# Running command in ${cwd}:")
+    errWriter.println(s"$$ ${cmd.mkString(" ")}")
+    val exitCode = Process(cmd, cwd.toFile)
+      .run(io)
+      .exitValue()
+
+    err.write(errByteArrayOutputStream.toByteArray)
+
+    if (
+      out.toString().contains(exc)
+      || errByteArrayOutputStream.toString().contains(exc)
+    ) {
+      throw new Exception(exc)
+    }
+    exitCode
   }
 
 }
