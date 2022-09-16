@@ -18,8 +18,8 @@ abstract class Console(val stream: PrintStream, val height: Int)
 }
 
 object Console {
-  val CSI = "\u001b["
-  val ESC = "\u001b"
+  private val CSI = "\u001b["
+  private val ESC = "\u001b"
   private val timer = new Timer( /* isDaemon = */ true)
 
   def withConsole[T](

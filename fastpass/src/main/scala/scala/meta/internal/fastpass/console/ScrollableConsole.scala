@@ -47,7 +47,7 @@ private class CircularBuffer(bufSize: Int) {
     }
   }
 
-  override def toString: String = {
+  override def toString(): String = {
     val output = new StringBuilder()
     foreach { buffer =>
       output.append(buffer.toString("UTF-8")).append(System.lineSeparator())
