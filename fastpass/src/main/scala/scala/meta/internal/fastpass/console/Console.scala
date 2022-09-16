@@ -19,6 +19,7 @@ abstract class Console(val stream: PrintStream, val height: Int)
 
 object Console {
   private val CSI = "\u001b["
+  private val ESC = "\u001b"
   private val timer = new Timer( /* isDaemon = */ true)
 
   def withConsole[T](
@@ -64,7 +65,7 @@ object Console {
     }
 
     console.stream.println(System.lineSeparator * (console.height - 1))
-    console.stream.print(s"${CSI}${console.height}A${CSI}s")
+    console.stream.print(s"${CSI}${console.height}A${ESC}7")
     timer.scheduleAtFixedRate(task, 0L, 50L)
 
     val logFile = Files.createTempFile("console-log", null)
@@ -86,7 +87,7 @@ object Console {
   }
 
   private def erase(stream: OutputStream): Unit = {
-    stream.write(s"${CSI}u${CSI}0J${CSI}s".getBytes("UTF-8"))
+    stream.write(s"${ESC}8${CSI}0J${ESC}7".getBytes("UTF-8"))
   }
 
   private def showLogError(
