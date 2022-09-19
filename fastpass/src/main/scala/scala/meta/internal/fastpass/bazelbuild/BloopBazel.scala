@@ -1063,6 +1063,27 @@ private class BloopBazel(
         None
     }
 
+  private def javaConfig(
+      target: Target,
+      inputsMapping: CopiedJars
+  ): Config.Platform.Jvm = {
+    val compileJvmConfig = Config.JvmConfig(
+      home = Some(Jdk.javaHome(target, Jdk.Compile)),
+      options = javaOptions(target)
+    )
+    val runtimeJvmConfig = Config.JvmConfig(
+      home = Some(Jdk.javaHome(target, Jdk.Runtime)),
+      options = javaOptions(target)
+    )
+    Config.Platform.Jvm(
+      config = compileJvmConfig,
+      mainClass = mainClass(target),
+      runtimeConfig = Some(runtimeJvmConfig),
+      classpath = Some(runtimeClasspath(inputsMapping, target)),
+      resources = None
+    )
+  }
+
   private def bloopProject(
       inputsMapping: CopiedJars,
       target: Target,
@@ -1081,17 +1102,7 @@ private class BloopBazel(
           (sources.flatten, globs.flatten)
       }
     val targetDir = BloopBazel.targetDirectory(project, projectName)
-    val jvmConfig = Config.JvmConfig(
-      home = Some(bazelInfo.javaHome.toNIO),
-      options = javaOptions(target)
-    )
-    val jvmPlatform = Config.Platform.Jvm(
-      jvmConfig,
-      mainClass = mainClass(target),
-      runtimeConfig = None,
-      classpath = Some(runtimeClasspath(inputsMapping, target)),
-      resources = None
-    )
+    val jvmPlatform = javaConfig(target, inputsMapping)
     val cp = classpath(inputsMapping, target)
 
     // Fork the compilation to avoid running out of file descriptors
