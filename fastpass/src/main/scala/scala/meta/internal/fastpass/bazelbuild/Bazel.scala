@@ -10,6 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.sys.process.Process
 import scala.sys.process.ProcessIO
@@ -173,6 +174,8 @@ class Bazel(bazelPath: Path, cwd: Path) {
   }
 
   def aquery(targets: List[String]): Try[ActionGraphContainer] = {
+    val bazelInternalError = "FATAL: bazel crashed due to an internal error."
+
     ProgressConsole.auto("Querying action graph") { err =>
       val out = new ByteArrayOutputStream
       val cmd = List(bazel, "aquery", targets.mkString(" + ")) ++ List(
@@ -181,10 +184,29 @@ class Bazel(bazelPath: Path, cwd: Path) {
         // Use textproto instead of proto, see https://github.com/bazelbuild/bazel/issues/12984
         "--output=textproto"
       )
-      val code = run(cmd, out, err)
+
+      val errByteArrayOutputStream = new ByteArrayOutputStream
+
+      @tailrec
+      def runBazelAqueryCommand(retries: Int): Int = {
+        errByteArrayOutputStream.reset()
+        val code = run(cmd, out, errByteArrayOutputStream)
+        if (
+          retries > 0 && code != 0 && errByteArrayOutputStream
+            .toString()
+            .contains(bazelInternalError)
+        ) runBazelAqueryCommand(retries - 1)
+        else code
+      }
+
+      val code = runBazelAqueryCommand(3)
+
+      err.write(errByteArrayOutputStream.toByteArray)
+
       if (code != 0) {
         throw new MessageOnlyException("Could not query action graph")
       }
+
       val in =
         new InputStreamReader(new ByteArrayInputStream(out.toByteArray()))
       val builder = ActionGraphContainer.newBuilder()
