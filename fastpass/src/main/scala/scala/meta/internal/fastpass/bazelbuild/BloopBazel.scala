@@ -136,7 +136,7 @@ object BloopBazel {
                 Bazel.PlatformClasspathLabel ::
                 Bazel.ProtobufJava ::
                 importedTargets.map(_.getRule.getName)
-            actions <- bazel.aquery(actionGraphLabels, 0)
+            actions <- bazel.aquery(actionGraphLabels, retries = 2)
             actionGraph = ActionGraph(actions)
             sourcesInfo <- targetToSources(extractors, importedTargets, bazel)
             rawInputs =
