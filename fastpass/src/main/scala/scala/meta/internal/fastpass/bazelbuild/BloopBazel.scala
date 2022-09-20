@@ -1435,13 +1435,44 @@ private class BloopBazel(
     val projectName = BloopBazel.bloopName(target)
     val projectPackage = projectName.takeWhile(_ != ':')
     val realBaseDirectory = project.common.workspace.resolve(projectPackage)
-    if (baseDirectory.startsWith(realBaseDirectory)) {
-      val toStrip = realBaseDirectory.relativize(baseDirectory).toString + "/"
+    if (
+      realBaseDirectory != baseDirectory && baseDirectory.startsWith(
+        realBaseDirectory
+      )
+    ) {
       globs.copy(
-        include = globs.include.map(_.stripPrefix(toStrip)),
-        exclude = globs.exclude.map(_.stripPrefix(toStrip))
+        include = globs.include.map(
+          rebaseGlob(_, baseDirectory, realBaseDirectory, Some(projectName))
+        ),
+        exclude =
+          globs.exclude.map(rebaseGlob(_, baseDirectory, realBaseDirectory))
       )
     } else globs
+  }
+
+  private def rebaseGlob(
+      glob: String,
+      baseDirectory: Path,
+      realBaseDirectory: Path,
+      print: Option[String] = None
+  ): String = {
+    val firstStar = glob.indexOf("*")
+    // If this is just a source file, then `baseDirectory` is necessarily an ancestor of the source file.
+    if (firstStar == -1) {
+      val toStrip = realBaseDirectory.relativize(baseDirectory).toString + "/"
+      glob.stripPrefix(toStrip)
+    } else {
+      val lastSeparator = glob.substring(0, firstStar).lastIndexOf("/")
+      if (lastSeparator == -1) glob
+      else {
+        val beforeGlob = glob.substring(0, lastSeparator)
+        val globPart = glob.substring(lastSeparator + 1)
+        val pathBeforeGlob = realBaseDirectory.resolve(beforeGlob)
+        if (pathBeforeGlob.startsWith(baseDirectory)) {
+          baseDirectory.relativize(pathBeforeGlob).resolve(globPart).toString
+        } else globPart
+      }
+    }
   }
 
   private def defaultGlobs(target: Target): PantsGlobs = {

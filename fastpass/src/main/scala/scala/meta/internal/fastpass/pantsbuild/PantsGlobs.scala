@@ -15,7 +15,45 @@ case class PantsGlobs(
     exclude: List[String]
 ) {
   def isEmpty: Boolean = include.isEmpty
+
   def bloopConfig(workspace: Path, baseDirectory: Path): C.SourcesGlobs = {
+    // Ensure the globs don't look at the parent directory (../) by translating
+    // (base = foo/bar, includes = [../hello/*.scala, *.java]) into
+    // (base = foo, includes = [hello/*.scala, bar/*.java])
+    (
+      include.partition(_.startsWith("../")),
+      exclude.partition(_.startsWith("../"))
+    ) match {
+      case ((Nil, _), (Nil, _)) =>
+        noParentDirectoryBloopConfig(workspace, baseDirectory)
+      case (
+            (inParentIncludes, otherIncludes),
+            (inParentExcludes, otherExcludes)
+          ) =>
+        val currentDir = baseDirectory.getFileName.toString
+        val newInParentIncludes = inParentIncludes.map(_.stripPrefix("../"))
+        val newOtherIncludes = otherIncludes.map(currentDir + "/" + _)
+        val newInParentExcludes = inParentExcludes.map(_.stripPrefix("../"))
+        val newOtherExcludes = otherExcludes.map(currentDir + "/" + _)
+
+        copy(
+          include = newInParentIncludes ++ newOtherIncludes,
+          exclude = newInParentExcludes ++ newOtherExcludes
+        ).bloopConfig(workspace, baseDirectory.getParent)
+    }
+  }
+
+  def toJson(): Value = {
+    val newJson = Obj()
+    newJson("globs") = include
+    newJson("exclude") = exclude.map(ex => Obj("globs" -> List(ex)))
+    newJson
+  }
+
+  private def noParentDirectoryBloopConfig(
+      workspace: Path,
+      baseDirectory: Path
+  ): C.SourcesGlobs = {
     val prefix = AbsolutePath(baseDirectory)
       .toRelative(AbsolutePath(workspace))
       .toURI(true)
@@ -46,12 +84,6 @@ case class PantsGlobs(
       includes = includeGlobs,
       excludes = excludeGlobs
     )
-  }
-  def toJson(): Value = {
-    val newJson = Obj()
-    newJson("globs") = include
-    newJson("exclude") = exclude.map(ex => Obj("globs" -> List(ex)))
-    newJson
   }
 }
 
