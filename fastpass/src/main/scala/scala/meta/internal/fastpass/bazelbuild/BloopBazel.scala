@@ -491,7 +491,8 @@ object BloopBazel {
 
   private val forbiddenGenerators: Map[String, List[String]] = Map(
     "" -> List("create_datasets", "antlr"),
-    "scala_library" -> List("jvm_app")
+    "scala_library" -> List("jvm_app"),
+    "_java_library" -> List("java_avro_library")
   )
 
   private val forbiddenTags: List[String] = List(
