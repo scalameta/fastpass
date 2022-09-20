@@ -1392,6 +1392,15 @@ private class BloopBazel(
             .get(absoluteLabel) match {
             case None =>
               (Nil, Nil)
+            case Some(SourcesInfo(Nil, _, _)) =>
+              // Finding empty includes means that we need to use the default globs
+              (
+                Nil,
+                defaultJavaGlobs.bloopConfig(
+                  project.common.workspace,
+                  baseDirectory
+                ) :: Nil
+              )
             case Some(SourcesInfo(include, exclude, _)) =>
               (
                 Nil,
@@ -1427,7 +1436,7 @@ private class BloopBazel(
   private def defaultGlobs(target: Target): PantsGlobs = {
     Bazel.generatorFunction(target) match {
       case Some("scala_library") => PantsGlobs("*.scala" :: Nil, Nil)
-      case Some("java_library") => PantsGlobs("*.java" :: Nil, Nil)
+      case Some("java_library") => defaultJavaGlobs
       case Some("junit_tests") =>
         PantsGlobs("*Test.scala" :: "*Spec.scala" :: "*Test.java" :: Nil, Nil)
       case Some("create_thrift_libraries") => PantsGlobs("*.thrift" :: Nil, Nil)
@@ -1441,6 +1450,8 @@ private class BloopBazel(
   private val defaultTestRootPattern = FileSystems.getDefault.getPathMatcher(
     "glob:**/{test,tests}"
   )
+
+  private val defaultJavaGlobs = PantsGlobs("*.java" :: Nil, Nil)
 
   private def approximateSourceRoot(dir: Path): Option[Path] = {
     @tailrec def loop(d: Path): Option[Path] = {
