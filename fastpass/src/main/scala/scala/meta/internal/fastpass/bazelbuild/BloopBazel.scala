@@ -482,11 +482,10 @@ object BloopBazel {
     "_scala_macro_library" -> Set("Scalac"),
     "scala_junit_test" -> Set("Scalac", "Javac"),
     "scala_binary" -> Set("Middleman"),
-    "_jvm_app" -> Set()
-    // Uncomment once Thrift support is ready.
-    // "scrooge_scala_library" -> Set("ScroogeRule", "Scalac"),
-    // "scrooge_java_library" -> Set("ScroogeRule", "Javac"),
-    // "thrift_library" -> Set("ScroogeRule")
+    "_jvm_app" -> Set(),
+    "scrooge_scala_library" -> Set("ScroogeRule", "Scalac"),
+    "scrooge_java_library" -> Set("ScroogeRule", "Javac"),
+    "thrift_library" -> Set("ScroogeRule")
   )
 
   private val forbiddenGenerators: Map[String, List[String]] = Map(
