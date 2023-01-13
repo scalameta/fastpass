@@ -23,7 +23,7 @@ jobs:
             CACHE_PATH: ~/Library/Caches/Coursier/v1
     steps:
       - uses: actions/checkout@v3
-      - uses: olafurpg/setup-scala@v10
+      - uses: olafurpg/setup-scala@v13
         with:
           java-version: "adopt@1.${{ matrix.java }}"
       - uses: arduino/setup-protoc@v1
